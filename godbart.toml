@@ -1,0 +1,44 @@
+[preference]
+# 数据库类型，目前只支持mysql
+databasetype = 'mysql'
+# 默认分割法
+delimiterraw = ';'
+# 重定义分隔符
+delimitercmd = 'DELIMITER'
+# 是否尽量使用事务，尤其迁移时
+transaction = true
+# 是否忽略错误继续执行
+ignoreerror = false
+# 单多行注释，正则处理，不做语法分析
+linecomment = '--'
+multcomment = ['/*','*/']
+# 连接池有关的，sql.DB一致
+connmaxopen = 10
+connmaxidel = 2
+
+
+
+[datasource]
+# 数据源名字和信息（和驱动有关）
+prd_main = 'trydofor:moilioncircle@tcp(127.0.0.1:3306)/prd_main'
+prd_2018 = 'trydofor:moilioncircle@tcp(127.0.0.1:3306)/prd_2018'
+dev_main = 'trydofor:moilioncircle@tcp(127.0.0.1:3306)/dev_main'
+lcl_main = 'trydofor:moilioncircle@tcp(127.0.0.1:3306)/lcl_main'
+
+# 表结构同步，包括field，index，trigger
+# 正则表达式数组表示，空值为忽略任何匹配。
+# filed,trigger,index 应该以`表名`+`.`做前缀，否则全局匹配。
+[diffschema]
+ignore_table = ['tmp_.*',]
+ignore_filed = ['tmp_.*',]
+ignore_index = ['tmp_.*',]
+ingore_trigr = ['tmp_.*',]
+
+# 数据迁移操作
+[treemoving]
+# 不执行任何操作
+none = ['sys_.*',]
+# 在source中delete，在dist中insert
+move = ['tx_parcel',]
+# 在source不做任何操作，在dist中insert
+copy = ['tx_receiver',]
