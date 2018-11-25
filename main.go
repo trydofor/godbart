@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	my "github.com/trydofor/godbart/internal"
 	"github.com/urfave/cli"
 	"io/ioutil"
@@ -9,27 +8,31 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
 
 func checkConf(ctx *cli.Context) *my.Config {
-	file := checkPath(ctx, "conf")
+	file := ctx.String("c")
+	log.Printf("[TRACE] got conf=%s\n", file)
 
-	for _, f := range file {
-		log.Printf("[TRACE] got conf=%s\n", f.Path)
-		conf, err := my.ParseToml(f.Text)
-		if err != nil {
-			log.Fatalf("[ERROR] can not parse TOML, config=%s\n", f.Path)
-			os.Exit(-1)
-		}
-		return conf
+	data, err := ioutil.ReadFile(file)
+	if err != nil {
+		log.Fatalf("[ERROR] can read config=%s\n", file)
+		os.Exit(-1)
 	}
-	return nil
+
+	conf, err := my.ParseToml(string(data))
+	if err != nil {
+		log.Fatalf("[ERROR] can not parse TOML, config=%s\n", file)
+		os.Exit(-1)
+	}
+	return conf
 }
 
 func checkDest(ctx *cli.Context, cnf *my.Config) []my.DataSource {
-	flag := ctx.StringSlice("dest")
+	flag := ctx.StringSlice("d")
 	if len(flag) == 0 {
 		log.Fatal("[ERROR] no dest db selected\n")
 		os.Exit(-2)
@@ -49,15 +52,19 @@ func checkDest(ctx *cli.Context, cnf *my.Config) []my.DataSource {
 	return dest
 }
 
-func checkPath(ctx *cli.Context, key string) (files []my.FileEntity) {
-
-	flag := ctx.String(key)
-	if flag == "" {
-		log.Fatalf("[ERROR] must give a value for key=%s\n", key)
-		os.Exit(-3)
+func checkSqls(ctx *cli.Context) (files []my.FileEntity) {
+	flag := ctx.StringSlice("x")
+	sufx := []string{}
+	for _, v := range flag {
+		if len(v) > 0 {
+			sufx = append(sufx, strings.ToLower(v))
+		}
 	}
 
-	// the function that handles each file or dir
+	if ctx.NArg() == 0 {
+		log.Fatal("[ERROR] must give a path or file for args\n")
+		os.Exit(-3)
+	}
 
 	var ff = func(p string, f os.FileInfo, e error) error {
 
@@ -66,7 +73,24 @@ func checkPath(ctx *cli.Context, key string) (files []my.FileEntity) {
 			return e
 		}
 
-		if !f.IsDir() {
+		if f.IsDir() {
+			return nil
+		}
+
+		h := false
+		if len(sufx) > 0 {
+			l := strings.ToLower(p)
+			for _, v := range sufx {
+				if strings.HasSuffix(l, v) {
+					h = true
+					break
+				}
+			}
+		} else {
+			h = true
+		}
+
+		if h {
 			data, err := ioutil.ReadFile(p)
 			if err != nil {
 				log.Fatalf("[ERROR] can read file=%s\n", f)
@@ -79,22 +103,24 @@ func checkPath(ctx *cli.Context, key string) (files []my.FileEntity) {
 		return nil
 	}
 
-	err := filepath.Walk(flag, ff)
-	if err != nil {
-		log.Fatalf("[ERROR] failed to read file=%s\n", key)
-		os.Exit(-3)
+	for _, p := range ctx.Args() {
+		err := filepath.Walk(p, ff)
+		if err != nil {
+			log.Fatalf("[ERROR] failed to read path or file=%s\n", p)
+			os.Exit(-3)
+		}
 	}
 
 	if len(files) < 1 {
-		log.Fatalf("[ERROR] must give a file=%s\n", key)
+		log.Fatal("[ERROR] can not find any SQLs\n")
 		os.Exit(-3)
 	}
 
 	return
 }
 
-func checkSour(ctx *cli.Context, cnf *my.Config) my.DataSource {
-	flag := ctx.String("source")
+func checkSrce(ctx *cli.Context, cnf *my.Config) my.DataSource {
+	flag := ctx.String("s")
 	if flag == "" {
 		log.Fatal("[ERROR] no source db selected\n")
 		os.Exit(-5)
@@ -112,7 +138,7 @@ func checkSour(ctx *cli.Context, cnf *my.Config) my.DataSource {
 }
 
 func checkEnvs(ctx *cli.Context) map[string]string {
-	flag := ctx.StringSlice("envs")
+	flag := ctx.StringSlice("e")
 
 	envs := make(map[string]string)
 	for _, e := range flag {
@@ -164,46 +190,81 @@ func checkEnvs(ctx *cli.Context) map[string]string {
 	return envs
 }
 
+func checkKind(ctx *cli.Context) string {
+	flag := ctx.String("k")
+	kind, ok := my.TbName, false
+	for _, v := range my.DiffKinds {
+		if strings.EqualFold(flag, v) {
+			kind = v
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		log.Fatalf("[ERROR] unsupported (K)ind=%q\n", flag)
+		os.Exit(-6)
+	}
+	return kind
+}
+
+func checkRegx(ctx *cli.Context) []*regexp.Regexp {
+	regx := []*regexp.Regexp{}
+	for _, v := range ctx.Args() {
+		re, err := regexp.Compile(v)
+		if err != nil {
+			log.Fatalf("[ERROR] failed to compile Regexp %s, %v\n", v, err)
+			os.Exit(-6)
+		}
+		log.Printf("[TRACE] got table regexp=%s\n", v)
+		regx = append(regx, re)
+	}
+	return regx
+}
+
+// command //
 func exec(ctx *cli.Context) (err error) {
 	conf := checkConf(ctx)
 	conf.StartupEnv = checkEnvs(ctx)
 	dest := checkDest(ctx, conf)
-	file := checkPath(ctx, "path")
-	test := ctx.Bool("test")
-	return my.Exec(&conf.Preference, dest, file, test)
+	test := ctx.Bool("t")
+	sqls := checkSqls(ctx)
+	return my.Exec(&conf.Preference, dest, sqls, test)
 }
 
 func revi(ctx *cli.Context) (err error) {
 	conf := checkConf(ctx)
 	conf.StartupEnv = checkEnvs(ctx)
 	dest := checkDest(ctx, conf)
-	file := checkPath(ctx, "path")
-	revi := ctx.String("revi")
-	test := ctx.Bool("test")
-	if revi == "" {
-		err = errors.New("need revi")
-	}
-	return my.Revi(&conf.Preference, dest, file, revi, test)
+	revi := ctx.String("r")
+	test := ctx.Bool("t")
+	sqls := checkSqls(ctx)
+	return my.Revi(&conf.Preference, dest, sqls, revi, test)
 }
 
 func diff(ctx *cli.Context) error {
 	conf := checkConf(ctx)
-	conf.StartupEnv = checkEnvs(ctx)
-	source := checkSour(ctx, conf)
+	srce := checkSrce(ctx, conf)
 	dest := checkDest(ctx, conf)
-	test := ctx.Bool("test")
-	return my.Diff(&conf.Preference, dest, &source, &conf.DiffSchema, test)
+
+	tbls := checkRegx(ctx)
+
+	kind := checkKind(ctx)
+	log.Printf("[TRACE] got kind=%s\n", kind)
+
+	return my.Diff(&conf.Preference, dest, &srce, tbls, kind)
 }
 
 func move(ctx *cli.Context) error {
 	conf := checkConf(ctx)
 	conf.StartupEnv = checkEnvs(ctx)
-	source := checkSour(ctx, conf)
+	srce := checkSrce(ctx, conf)
 	dest := checkDest(ctx, conf)
-	test := ctx.Bool("test")
-	return my.Move(&conf.Preference, dest, &source, &conf.TreeMoving, test)
+	test := ctx.Bool("t")
+	sqls := checkSqls(ctx)
+	return my.Move(&conf.Preference, dest, &srce, sqls, test)
 }
 
+// cli //
 func main() {
 
 	app := cli.NewApp()
@@ -216,49 +277,58 @@ func main() {
 	app.Usage = app.Name + " command args"
 	app.Description = "SQL-based CLI for RDBMS schema versioning & data migration"
 
+	//
 	confFlag := &cli.StringFlag{
-		Name:  "conf, c",
-		Usage: "the main config",
+		Name:  "c",
+		Usage: "the main (C)onfig",
 		Value: "godbart.toml",
 	}
 
-	sourceFlag := &cli.StringFlag{
-		Name:  "source, s",
-		Usage: "the source datasources in config",
-	}
-
-	testFlag := &cli.BoolFlag{
-		Name:  "test, t",
-		Usage: "only test and report, not realy run",
-	}
-
 	destFlag := &cli.StringSliceFlag{
-		Name:  "dest, d",
-		Usage: "the destination datasources in config",
+		Name:  "d",
+		Usage: "the (D)estination db in config",
 	}
 
 	envsFlag := &cli.StringSliceFlag{
-		Name:  "envs, e",
-		Usage: "the environment `-e 'DATE_FROM=2018-11-23 12:34:56'`",
+		Name:  "e",
+		Usage: "the (E)nvironment. eg. \"-e MY_DATE='2015-11-18 12:34:56'\"",
 	}
 
-	pathFlag := &cli.StringFlag{
-		Name:  "path, p",
-		Usage: "the sql path or file to exec",
+	kindFlag := &cli.StringFlag{
+		Name:  "k",
+		Usage: "the (K)ind to diff [detail|create|tbname]. detail:table details (column, index, trigger). create:show create ddl (table, trigger). tbname:only table's name.",
+		Value: "tbname",
 	}
 
 	reviFlag := &cli.StringFlag{
-		Name:  "revi, r",
-		Usage: "the revision to run to",
+		Name:  "r",
+		Usage: "the (R)evision to run to",
 	}
 
+	srceFlag := &cli.StringFlag{
+		Name:  "s",
+		Usage: "the (S)ource db in config",
+	}
+
+	testFlag := &cli.BoolFlag{
+		Name:  "t",
+		Usage: "only (T)est Report NOT really run",
+	}
+
+	sufxFlag := &cli.StringSliceFlag{
+		Name:  "x",
+		Usage: "the Suffi(X) of SQL files. eg \".sql\"",
+	}
+
+	//
 	app.Commands = []cli.Command{
 		{
-			Name:  "exec",
-			Usage: "execute sql on dbs",
+			Name:      "exec",
+			Usage:     "execute SQLs on dbs",
+			ArgsUsage: "some files or paths of SQLs",
 			Flags: []cli.Flag{
 				confFlag,
-				pathFlag,
+				sufxFlag,
 				destFlag,
 				envsFlag,
 				testFlag,
@@ -266,11 +336,12 @@ func main() {
 			Action: exec,
 		},
 		{
-			Name:  "revi",
-			Usage: "upgrade schema by revision",
+			Name:      "revi",
+			Usage:     "upgrade schema by revision",
+			ArgsUsage: "some files or paths of SQLs",
 			Flags: []cli.Flag{
 				confFlag,
-				pathFlag,
+				sufxFlag,
 				destFlag,
 				reviFlag,
 				envsFlag,
@@ -279,23 +350,24 @@ func main() {
 			Action: revi,
 		},
 		{
-			Name:  "diff",
-			Usage: "diff column,index,trigger",
+			Name:      "diff",
+			Usage:     "diff table, column, index, trigger",
+			ArgsUsage: "tables to diff (regexp/i). empty means all",
 			Flags: []cli.Flag{
 				confFlag,
-				sourceFlag,
+				srceFlag,
 				destFlag,
-				envsFlag,
-				testFlag,
+				kindFlag,
 			},
 			Action: diff,
 		},
 		{
-			Name:  "move",
-			Usage: "move data tree to other db",
+			Name:      "move",
+			Usage:     "move data between dbs",
+			ArgsUsage: "some files or paths of SQLs",
 			Flags: []cli.Flag{
 				confFlag,
-				sourceFlag,
+				srceFlag,
 				destFlag,
 				envsFlag,
 				testFlag,

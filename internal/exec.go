@@ -9,8 +9,8 @@ func Exec(pref *Preference, dest []DataSource, file []FileEntity, test bool) (er
 
 	for _, f := range file {
 		log.Printf("[TRACE] exec file=%s\n", f.Path)
-		var sqd *SqlDyn
-		sqd, err = ParseSql(pref, &f)
+		var sqls *SqlSeg // err is shadowed during return
+		sqls, err = ParseSqls(pref, &f)
 		if err != nil {
 			log.Fatalf("[ERROR] failed to parse sql, err=%v\n", err)
 			return
@@ -19,37 +19,47 @@ func Exec(pref *Preference, dest []DataSource, file []FileEntity, test bool) (er
 		wg := &sync.WaitGroup{}
 		for _, v := range dest {
 			conn := &MyConn{}
+			log.Printf("[TRACE] trying Db=%s\n", v.Code)
 			err = conn.Open(pref, &v)
+
 			if err != nil {
 				log.Fatalf("[ERROR] failed to open db=%s, err=%v\n", v.Code, err)
 				continue
 			}
+			log.Printf("[TRACE] opened Db=%s\n", v.Code)
+
+			wg.Add(1)
 			if test {
-				for _, v := range sqd.Segs {
-					if v.Type != COMMENT {
-						log.Printf("[DEBUG] exec-test: print only, NOT run.\n-- db=%s ,file=%s ,line=%s\n%s\n", conn.DbName(), v.File, v.Line, v.Text)
-					}
-				}
+				goExec(wg, sqls, conn, test)
 			} else {
-				wg.Add(1)
-				go goExec(wg, sqd, conn)
+				go goExec(wg, sqls, conn, test)
 			}
+
 		}
+
 		wg.Wait()
 	}
 	return
 }
 
-func goExec(wg *sync.WaitGroup, sqd *SqlDyn, conn Conn) {
+func goExec(wg *sync.WaitGroup, sqd *SqlSeg, conn Conn, test bool) {
 	defer wg.Done()
-	for _, v := range sqd.Segs {
-		if v.Type != COMMENT {
+	c := len(sqd.Segs)
+	for i, v := range sqd.Segs {
+		p := i + 1
+
+		if v.Type != SegCmt {
+			if test {
+				log.Printf("[DEBUG] db=%s, %d/%d, TEST, NOT run.\n-- file=%s ,line=%s\n%s\n", conn.DbName(), p, c, v.File, v.Line, v.Text)
+				continue
+			}
+
 			cnt, err := conn.Exec(v.Text)
 			if err != nil {
-				log.Fatalf("[ERROR] failed to exec sql on db=%s ,file=%s ,line=%s ,err=%v\n", conn.DbName(), v.File, v.Line, err)
+				log.Fatalf("[ERROR] db=%s, %d/%d, failed to exec sql, file=%s, line=%s, err=%v\n", conn.DbName(), p, c, v.File, v.Line, err)
 				break
 			} else {
-				log.Printf("[TRACE] %d affects. db=%s ,file=%s ,line=%s\n", cnt, conn.DbName(), v.File, v.Line)
+				log.Printf("[TRACE] db=%s, %d/%d, %d affects. file=%s, line=%s\n", conn.DbName(), p, c, cnt, v.File, v.Line)
 			}
 		}
 	}

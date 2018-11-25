@@ -8,12 +8,12 @@ import (
 
 func Test_ParseSql(t *testing.T) {
 
-	file := "../demo/sql/mig/tree.sql"
-	//file := "../demo/sql/img/1.table.sql"
+	file := "../demo/sql/tree/tree.sql"
+	//file := "../demo/sql/init/1.table.sql"
 	bytes, err := ioutil.ReadFile(file)
 	panicIfErr(err)
 
-	sqld, err := ParseSql(pref, &FileEntity{file, string(bytes)})
+	sqld, err := ParseSqls(pref, &FileEntity{file, string(bytes)})
 	panicIfErr(err)
 
 	fmt.Println("args------")
@@ -24,4 +24,13 @@ func Test_ParseSql(t *testing.T) {
 	for _, x := range sqld.Segs {
 		fmt.Printf("%#v\n", x)
 	}
+}
+
+func Test_DepairQuote(t *testing.T) {
+
+	q2 := "`'12345'`"
+	fmt.Printf("%s\n", q2)
+
+	cnt := pairQuote(q2)
+	fmt.Printf("%d\n", cnt)
 }

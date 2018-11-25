@@ -6,21 +6,15 @@ import (
 	"strings"
 )
 
-type SqlDyn struct {
+const (
+	SegCmt = 0
+	SegRow = 1
+	SegExe = 2
+)
+
+type SqlSeg struct {
 	Segs []Seg // 文件中所有段（SQL和注释）
 	Args []Arg // 所有注释中的参数部分
-	Exes []Exe // SQL执行时的依赖
-}
-
-type Exe struct {
-	Seg  *Seg              // 对应的SQL片段
-	Stm  string            // 执行的SQL statement,`?`替换
-	Args []*Arg            // statement 需要的参数，`？`的顺序
-	Envs map[string]string // 依赖的ENV
-	Deps map[string]string // 依赖的REF
-	Refs map[string]string // 产生的REF
-	Fork []*Exe            // 结束时分叉执行
-	Done []*Exe            // 结束时执行的RUN
 }
 
 type Arg struct {
@@ -30,27 +24,16 @@ type Arg struct {
 	Hold string // 占位符
 }
 
-const (
-	COMMENT = 0
-	SELECTS = 1
-	EXECUTE = 2
-)
-
 type Seg struct {
 	Line string // 开始和结束行，全闭区间
-	Type int    // 是否为注释0，SELECT1，
+	Type int    // 0:注释, 1:SELECT, 2:执行语句
 	File string // 文件名或名字
 	Text string // 正文部分
 }
 
 var crlfReg = regexp.MustCompile(`[ \t]*(\r\n|\r|\n)[ \t]*`) // 换行分割并去掉左右空白
-var argsReg = regexp.MustCompile(`(?i)` +                    // 不区分大小写
-	`^[^0-9A-Z]*` + // 非英数开头，一般为注释
-	`(ENV|REF|RUN|STR)[ \t]+` + //命令和空白，第一分组，固定值
-	"([^`'\" \t]+|'.+'|\".+\"|`.+`)[ \t]+" + // 变量和空白，第二分组，英数下划线
-	"([^`'\" \t]+|'.+'|\".+\"|`.+`)") // 连续非引号空白或，单双反引号成对括起来的字符串（贪婪）
 
-func ParseSql(pref *Preference, file *FileEntity) (sqld *SqlDyn, err error) {
+func ParseSqls(pref *Preference, file *FileEntity) (sqls *SqlSeg, err error) {
 
 	lines := crlfReg.Split(file.Text, -1)
 	sbgn, mbgn, tbgn := -1, -1, -1
@@ -71,7 +54,7 @@ func ParseSql(pref *Preference, file *FileEntity) (sqld *SqlDyn, err error) {
 		// 多行注释结束
 		if mbgn >= 0 {
 			if isCommentEnd(pref, line) {
-				doCmntArg(&args, lines, mbgn, i)
+				doParaArg(&args, lines, mbgn, i)
 				doComment(&segs, lines, file.Path, &mbgn, i)
 			}
 			continue
@@ -88,7 +71,7 @@ func ParseSql(pref *Preference, file *FileEntity) (sqld *SqlDyn, err error) {
 
 		// 单行注释结束
 		if sbgn >= 0 {
-			doCmntArg(&args, lines, sbgn, i-1)
+			doParaArg(&args, lines, sbgn, i-1)
 			doComment(&segs, lines, file.Path, &sbgn, i-1)
 		}
 
@@ -107,64 +90,52 @@ func ParseSql(pref *Preference, file *FileEntity) (sqld *SqlDyn, err error) {
 
 	l := len(lines) - 1
 	if sbgn > 0 {
-		doCmntArg(&args, lines, sbgn, l)
+		doParaArg(&args, lines, sbgn, l)
 		doComment(&segs, lines, file.Path, &sbgn, l)
 	}
 	if mbgn > 0 {
-		doCmntArg(&args, lines, mbgn, l)
+		doParaArg(&args, lines, mbgn, l)
 		doComment(&segs, lines, file.Path, &mbgn, l)
 	}
 	if tbgn > 0 {
 		doSqlSeg(&segs, lines, file.Path, &tbgn, l, &dt, dc)
 	}
 
-	exes := doExeTree(pref, segs, args)
-	sqld = &SqlDyn{segs, args, exes}
+	sqls = &SqlSeg{segs, args}
 	return
 }
 
-func doExeTree(pref *Preference, segs []Seg, args []Arg) (exes []Exe) {
-	// 大部分情况，直接返回
-	if len(args) == 0 {
-		for _, v := range segs {
-			if v.Type != COMMENT {
-				exes = append(exes, Exe{&v, v.Text, nil, nil, nil, nil, nil, nil})
-			}
-		}
-		return
-	}
+const (
+	CmndEnv = "ENV"
+	CmndRef = "REF"
+	CmndStr = "STR"
+	CmndRun = "RUN"
+	CmndOut = "OUT"
+)
 
-	//deep := make(map[string]int) // 某行处SQL段的深度
+var cmdArrs = []string{CmndEnv, CmndRef, CmndStr, CmndRun, CmndOut}
 
-	for i, v := range segs {
-		if v.Type != COMMENT {
-			// TODO
-			fmt.Printf("\ttodo %d\n", i)
-		}
-	}
-	return
-}
+var argsReg = regexp.MustCompile(`(?i)` + // 不区分大小写
+	`^[^0-9A-Z]*` + // 非英数开头，视为注释部分
+	`(` + strings.Join(cmdArrs, "|") + `)[ \t]+` + //命令和空白，第一分组，固定值
+	"([^`'\" \t]+|'[^']+'|\"[^\"]+\"|`[^`]+`)[ \t]+" + // 变量和空白，第二分组，
+	"([^`'\" \t]+|'[^']+'|\"[^\"]+\"|`[^`]+`)") // 连续的非引号空白或，引号成对括起来的字符串（贪婪）
 
-func doCmntArg(args *[]Arg, lines []string, b int, e int) {
+func doParaArg(args *[]Arg, lines []string, b int, e int) {
 	// 分析参数 ENV REF RUN
 	ln := fmt.Sprintf("%d:%d", b+1, e+1)
-	var tm = func(r rune) bool {
-		return r == '"' || r == '\'' || r == '`'
-	}
 
 	for _, v := range lines[b : e+1] {
 		sm := argsReg.FindStringSubmatch(v)
 		if len(sm) == 4 {
 			cmd := strings.ToUpper(sm[1])
-			if cmd == "RUN" {
-				sm[2] = strings.ToUpper(sm[2]) // 条件命令大写
-			} else {
-				sm[2] = strings.TrimFunc(sm[2], tm) // 变量去掉引号
+			if cmd == CmndRun || cmd == CmndOut {
+				sm[2] = strings.ToUpper(sm[2]) // 命令变量大写
+			} else if cmd == CmndRef || cmd == CmndEnv {
+				if cp := pairQuote(sm[2]); cp > 0 { //引用变量脱引号
+					sm[2] = sm[2][cp : len(sm[2])-cp]
+				}
 			}
-
-			//if cmd == "ENV" {
-			//	sm[3] = strings.TrimFunc(sm[3], tm) // 环境变量的占位去引号
-			//}
 
 			arg := Arg{ln, cmd, sm[2], sm[3]}
 			*args = append(*args, arg)
@@ -180,7 +151,7 @@ func doComment(segs *[]Seg, lines []string, name string, b *int, e int) {
 	i := e + 1
 	text := strings.Join(lines[*b:i], "\n")
 	*segs = append(*segs, Seg{
-		fmt.Sprintf("%d:%d", *b+1, i), COMMENT, name, text,
+		fmt.Sprintf("%d:%d", *b+1, i), SegCmt, name, text,
 	})
 
 	*b = -1
@@ -196,9 +167,9 @@ func doSqlSeg(segs *[]Seg, lines []string, name string, b *int, e int, dt *strin
 	dtl, dcl := len(*dt), len(dc)
 	typ := func(sql string) int {
 		if strings.EqualFold("SELECT", sql[0:6]) {
-			return SELECTS
+			return SegRow
 		} else {
-			return EXECUTE
+			return SegExe
 		}
 	}
 	//seg := func(s, e int, lines []string) Seg {
@@ -251,6 +222,8 @@ func doSqlSeg(segs *[]Seg, lines []string, name string, b *int, e int, dt *strin
 	*b = -1
 }
 
+// helper
+
 func isCommentLine(pref *Preference, str string) bool {
 	if pref.LineComment == "" {
 		return false
@@ -285,4 +258,24 @@ func isCommentEnd(pref *Preference, str string) bool {
 	}
 
 	return false
+}
+
+func pairQuote(str string) (cnt int) {
+	l := len(str)
+	if l < 2 {
+		return 0
+	}
+
+	cnt = 0
+	for {
+		i := len(str) - 1
+		c, e := str[0], str[i]
+		if c == e && (c == '"' || c == '\'' || c == '`') {
+			cnt++
+			str = str[1:i]
+		} else {
+			break
+		}
+	}
+	return
 }

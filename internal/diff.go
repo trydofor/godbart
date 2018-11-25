@@ -1,11 +1,21 @@
 package internal
 
-import "fmt"
+import (
+	"fmt"
+	"regexp"
+)
 
-func Diff(pref *Preference, dest []DataSource, source *DataSource, sync *DiffSchema, test bool) (err error) {
+const (
+	TbName = "tbname"
+	Detail = "detail"
+	Create = "create"
+)
+
+var DiffKinds = []string{TbName, Detail, Create}
+
+func Diff(pref *Preference, dest []DataSource, source *DataSource, tbls []*regexp.Regexp, kind string) (err error) {
 
 	fmt.Println(dest)
 	fmt.Println(source)
-	fmt.Println(test)
 	return nil
 }
