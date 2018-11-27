@@ -25,11 +25,11 @@
 在不同的db上，批量执行脚本。脚本中支持环境变量，结果集引用，条件执行等。
 
 ```bash
+# 执行 demo/sql/init/的`*.sql`和`*.xsql`
 ./godbart exec \
  -c godbart.toml \
  -d prd_main -d prd_2018 \
- -x .sql -x .xsql
- -e TEST=xxxx -e SPLT="我的 测试" -e ONE \
+ -x .sql -x .xsql \
  -t \
  demo/sql/init/
 ```
@@ -39,28 +39,53 @@
  * `-c` 必填，配置文件位置。
  * `-d` 必填，目标数据库，可以指定多个。
  * `-x` 选填，SQL文件后缀，不区分大小写。
- * `-e` 选填，环境变量，用户指定或使用系统的。
- * `-t` 选填，测试。
+ * `-t` 选填，日志输出sql，但不在DB上执行。
 
 ## 2.版本管理 Revi
 
 每次`schema`或数据的更新，都需要有版本管理。通常，使用一个sequence表，记录版本号。
 并且我们只考虑升级不考虑降级。如果出现需要降级的情况时，建议以负相补丁形式进行升级。
 
+```bash
+# 执行 demo/sql/revi/*.sql，具体SQL写法参考此目录的文件
+./godbart revi \
+ -c godbart.toml \
+ -d prd_main -d prd_2018 \
+ -r 2018111701 \
+ -m 'v_[0-9]{10,}'
+ -x .sql -x .xsql \
+ -t \
+ demo/sql/revi/
+```
+
+其中，`revi` 命令，会把输入的文件或路径的SQL进行版本切分。
+
+ * `-c` 必填，配置文件位置。
+ * `-d` 必填，目标数据库，可以指定多个。
+ * `-r` 必填，执行到的版本号。
+ * `-m` 选填，更新版本语句的Revision规则，默认10位以上数字。
+ * `-x` 选填，SQL文件后缀，不区分大小写。
+ * `-t` 选填，日志输出sql，但不在DB上执行。
+
+`版本号`要求，
+ * 必须唯一且递增
+ * 可以当做字符串比较大小，如日期+序号：`yyyymmdd###`。
+ * 具有相同的格式，可以用正则匹配
+
+
+版本管理的SQL书写有特别的格式，每个版本块，必须被`版本查询`和`版本更新`的SQL包围。
+因此，SQL文件中，首个单值SELECT和最尾的Execute，视为版本查询和更新的SQL。
+
+作为参数传入的版本文件，需要增序，与内置的版本顺序一致。
+
 ```mysql
--- 创建version表
+-- 创建version表 # 此时没有版本查询，但在之前，因此会被执行
 CREATE TABLE `sys_schema_version` (
   `version` BIGINT NOT NULL COMMENT '版本号',
   `created` DATETIME NOT NULL COMMENT '创建时间',
   PRIMARY KEY (`version`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-```
 
-版本号要求必须唯一且递增.下例是有版本的SQL，版本规则为日期+序号：`yyyymmdd###`。
-版本管理的SQL书写有特别的格式，每个版本块，必须被版本查询和更新的SQL包围。
-因此，一个有版本的SQL文件，首个单值SELECT和尾行的非SELECT，视为版本查询和更新。
-
-```mysql
 -- 版本查询
 SELECT max(version) FROM sys_schema_version;
 

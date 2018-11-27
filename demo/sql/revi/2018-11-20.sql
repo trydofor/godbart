@@ -23,4 +23,4 @@ FOR EACH ROW BEGIN
 END $$
 DELIMITER ;
 
-REPLACE INTO sys_schema_version (version, created) VALUES( 2018111201, NOW());
+REPLACE INTO sys_schema_version (version, created) VALUES( 2018112001, NOW());

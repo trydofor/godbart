@@ -236,22 +236,20 @@ func revi(ctx *cli.Context) (err error) {
 	conf.StartupEnv = checkEnvs(ctx)
 	dest := checkDest(ctx, conf)
 	revi := ctx.String("r")
+	mask := ctx.String("m")
 	test := ctx.Bool("t")
 	sqls := checkSqls(ctx)
-	return my.Revi(&conf.Preference, dest, sqls, revi, test)
+	return my.Revi(&conf.Preference, dest, sqls, revi, mask, test)
 }
 
 func diff(ctx *cli.Context) error {
 	conf := checkConf(ctx)
 	srce := checkSrce(ctx, conf)
 	dest := checkDest(ctx, conf)
-
-	tbls := checkRegx(ctx)
-
 	kind := checkKind(ctx)
+	tbls := checkRegx(ctx)
 	log.Printf("[TRACE] got kind=%s\n", kind)
-
-	return my.Diff(&conf.Preference, dest, &srce, tbls, kind)
+	return my.Diff(&conf.Preference, dest, &srce, kind, tbls)
 }
 
 func move(ctx *cli.Context) error {
@@ -300,6 +298,12 @@ func main() {
 		Value: "tbname",
 	}
 
+	maskFlag := &cli.StringFlag{
+		Name:  "m",
+		Usage: "the (M)ask of the revision",
+		Value: "[0-9]{10,}",
+	}
+
 	reviFlag := &cli.StringFlag{
 		Name:  "r",
 		Usage: "the (R)evision to run to",
@@ -330,7 +334,6 @@ func main() {
 				confFlag,
 				sufxFlag,
 				destFlag,
-				envsFlag,
 				testFlag,
 			},
 			Action: exec,
@@ -344,7 +347,7 @@ func main() {
 				sufxFlag,
 				destFlag,
 				reviFlag,
-				envsFlag,
+				maskFlag,
 				testFlag,
 			},
 			Action: revi,
