@@ -31,18 +31,18 @@ func checkConf(ctx *cli.Context) *my.Config {
 	return conf
 }
 
-func checkDest(ctx *cli.Context, cnf *my.Config) []my.DataSource {
+func checkDest(ctx *cli.Context, cnf *my.Config) []*my.DataSource {
 	flag := ctx.StringSlice("d")
 	if len(flag) == 0 {
 		log.Fatal("[ERROR] no dest db selected\n")
 		os.Exit(-2)
 	}
 
-	dest := make([]my.DataSource, len(flag))
+	dest := make([]*my.DataSource, len(flag))
 	for i := 0; i < len(flag); i++ {
 		if d, ok := cnf.DataSource[flag[i]]; ok {
 			log.Printf("[TRACE] got dest db=%s\n", flag[i])
-			dest[i] = d
+			dest[i] = &d
 		} else {
 			log.Fatalf("[ERROR] db not found, dest=%s\n", flag[i])
 			os.Exit(-2)
@@ -119,7 +119,7 @@ func checkSqls(ctx *cli.Context) (files []my.FileEntity) {
 	return
 }
 
-func checkSrce(ctx *cli.Context, cnf *my.Config) my.DataSource {
+func checkSrce(ctx *cli.Context, cnf *my.Config) *my.DataSource {
 	flag := ctx.String("s")
 	if flag == "" {
 		log.Fatal("[ERROR] no source db selected\n")
@@ -134,7 +134,7 @@ func checkSrce(ctx *cli.Context, cnf *my.Config) my.DataSource {
 		os.Exit(-5)
 	}
 
-	return ds
+	return &ds
 }
 
 func checkEnvs(ctx *cli.Context) map[string]string {
@@ -249,7 +249,7 @@ func diff(ctx *cli.Context) error {
 	kind := checkKind(ctx)
 	tbls := checkRegx(ctx)
 	log.Printf("[TRACE] got kind=%s\n", kind)
-	return my.Diff(&conf.Preference, dest, &srce, kind, tbls)
+	return my.Diff(&conf.Preference, srce, dest, kind, tbls)
 }
 
 func move(ctx *cli.Context) error {
@@ -259,7 +259,7 @@ func move(ctx *cli.Context) error {
 	dest := checkDest(ctx, conf)
 	test := ctx.Bool("t")
 	sqls := checkSqls(ctx)
-	return my.Move(&conf.Preference, dest, &srce, sqls, test)
+	return my.Move(&conf.Preference, srce, dest, sqls, test)
 }
 
 // cli //

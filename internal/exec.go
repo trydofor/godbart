@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-func Exec(pref *Preference, dest []DataSource, file []FileEntity, test bool) (err error) {
+func Exec(pref *Preference, dest []*DataSource, file []FileEntity, test bool) (err error) {
 
 	for _, f := range file {
 		log.Printf("[TRACE] exec file=%s\n", f.Path)
@@ -20,7 +20,7 @@ func Exec(pref *Preference, dest []DataSource, file []FileEntity, test bool) (er
 		for _, v := range dest {
 			conn := &MyConn{}
 			log.Printf("[TRACE] trying Db=%s\n", v.Code)
-			err = conn.Open(pref, &v)
+			err = conn.Open(pref, v)
 
 			if err != nil {
 				log.Fatalf("[ERROR] failed to open db=%s, err=%v\n", v.Code, err)

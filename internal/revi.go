@@ -15,7 +15,7 @@ type ReviSeg struct {
 	segs []Seg
 }
 
-func Revi(pref *Preference, dest []DataSource, file []FileEntity, revi string, mask string, test bool) (err error) {
+func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi string, mask string, test bool) (err error) {
 
 	mreg, err := regexp.Compile(mask)
 	if err != nil {
@@ -51,7 +51,9 @@ func Revi(pref *Preference, dest []DataSource, file []FileEntity, revi string, m
 						log.Printf("[TRACE] find SLT-REVI-SQL, file=%s, line=%s, sql=%s\n", w.File, w.Line, w.Text)
 					} else {
 						if reviSlt != w.Text {
-							log.Fatalf("[ERROR] SLT-REVI-SQL changed, file=%s, line=%s, sql=%s\n", w.File, w.Line, w.Text)
+							s := fmt.Sprintf("[ERROR] SLT-REVI-SQL changed, file=%s, line=%s, sql=%s\n", w.File, w.Line, w.Text)
+							log.Fatal(s)
+							err = errors.New(s)
 							return
 						}
 					}
@@ -83,7 +85,9 @@ func Revi(pref *Preference, dest []DataSource, file []FileEntity, revi string, m
 						reviCurr = r
 					} else {
 						if strings.Compare(reviCurr, r) <= 0 {
-							log.Fatalf("[ERROR] need uniq&asc revi, but %s <= %s. file=%s, line=%s, sql=%s\n", reviCurr, r, v.File, v.Line, v.Text)
+							s := fmt.Sprintf("[ERROR] need uniq&asc revi, but %s <= %s. file=%s, line=%s, sql=%s\n", reviCurr, r, v.File, v.Line, v.Text)
+							log.Fatal(s)
+							err = errors.New(s)
 							return
 						}
 					}
@@ -109,13 +113,17 @@ func Revi(pref *Preference, dest []DataSource, file []FileEntity, revi string, m
 	}
 
 	if !reviFind {
-		log.Fatalf("[ERROR] can not find assigned revi=%s\n", revi)
+		s := fmt.Sprintf("[ERROR] can not find assigned revi=%s\n", revi)
+		log.Fatal(s)
+		err = errors.New(s)
 		return
 	}
 
 	lastIdx := len(reviSegs) - 1
 	if lastIdx < 0 {
-		log.Fatalf("[ERROR] no sqls to run for revi=%s\n", revi)
+		s := fmt.Sprintf("[ERROR] no sqls to run for revi=%s\n", revi)
+		log.Fatal(s)
+		err = errors.New(s)
 		return
 	}
 
@@ -133,7 +141,7 @@ func Revi(pref *Preference, dest []DataSource, file []FileEntity, revi string, m
 	for _, v := range dest {
 		conn := &MyConn{}
 		log.Printf("[TRACE] trying Db=%s\n", v.Code)
-		err = conn.Open(pref, &v)
+		err = conn.Open(pref, v)
 
 		if err != nil {
 			log.Fatalf("[ERROR] failed to open db=%s, err=%v\n", v.Code, err)
