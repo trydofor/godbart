@@ -273,7 +273,12 @@ func main() {
 
 	app.Name = "godbart"
 	app.Usage = app.Name + " command args"
-	app.Description = "SQL-based CLI for RDBMS schema versioning & data migration"
+	app.Description = `SQL-based CLI for RDBMS schema versioning & data migration
+
+		readme   - https://github.com/trydofor/godbart
+		config   - https://github.com/trydofor/godbart/blob/master/godbart.toml
+		demo sql - https://github.com/trydofor/godbart/tree/master/demo/sql/
+`
 
 	//
 	confFlag := &cli.StringFlag{
