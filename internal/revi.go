@@ -76,7 +76,7 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi string, 
 					if len(reviUdp) == 0 { // first
 						log.Printf("[TRACE] find UPD-REVI-SQL, revi=%s, file=%s, line=%s, sql=%s\n", r, v.File, v.Line, v.Text)
 						p := strings.Index(v.Text, r)
-						reviUdp = trimUpdRevi(v.Text[0:p])
+						reviUdp = strings.ToLower(removeWhite(v.Text[0:p]))
 					} else {
 						log.Printf("[TRACE] find more revi=%s, file=%s, line=%s\n", r, v.File, v.Line)
 					}
@@ -162,15 +162,8 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi string, 
 	return
 }
 
-var blankRegexp = regexp.MustCompile("[ \t\r\n]+")
-
-func trimUpdRevi(str string) string {
-	lower := strings.ToLower(str)
-	return blankRegexp.ReplaceAllString(lower, "")
-}
-
 func findUpdRevi(updSeg string, updRevi string, mask *regexp.Regexp) (revi string) {
-	if len(updRevi) > 0 && !strings.HasPrefix(trimUpdRevi(updSeg), updRevi) { // 判断相似度
+	if len(updRevi) > 0 && !strings.HasPrefix(strings.ToLower(removeWhite(updSeg)), updRevi) { // 判断相似度
 		return
 	}
 

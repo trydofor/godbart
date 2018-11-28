@@ -31,6 +31,6 @@ func Test_DepairQuote(t *testing.T) {
 	q2 := "`'12345'`"
 	fmt.Printf("%s\n", q2)
 
-	cnt := pairQuote(q2)
+	cnt := countQuotePair(q2)
 	fmt.Printf("%d\n", cnt)
 }

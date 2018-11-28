@@ -31,11 +31,9 @@ type Seg struct {
 	Text string // 正文部分
 }
 
-var crlfReg = regexp.MustCompile(`[ \t]*(\r\n|\r|\n)[ \t]*`) // 换行分割并去掉左右空白
-
 func ParseSqls(pref *Preference, file *FileEntity) (sqls *SqlSeg, err error) {
 
-	lines := crlfReg.Split(file.Text, -1)
+	lines := splitLinex(file.Text)
 	sbgn, mbgn, tbgn := -1, -1, -1
 
 	segs := []Seg{}
@@ -132,7 +130,7 @@ func doParaArg(args *[]Arg, lines []string, b int, e int) {
 			if cmd == CmndRun || cmd == CmndOut {
 				sm[2] = strings.ToUpper(sm[2]) // 命令变量大写
 			} else if cmd == CmndRef || cmd == CmndEnv {
-				if cp := pairQuote(sm[2]); cp > 0 { //引用变量脱引号
+				if cp := countQuotePair(sm[2]); cp > 0 { //引用变量脱引号
 					sm[2] = sm[2][cp : len(sm[2])-cp]
 				}
 			}
@@ -258,24 +256,4 @@ func isCommentEnd(pref *Preference, str string) bool {
 	}
 
 	return false
-}
-
-func pairQuote(str string) (cnt int) {
-	l := len(str)
-	if l < 2 {
-		return 0
-	}
-
-	cnt = 0
-	for {
-		i := len(str) - 1
-		c, e := str[0], str[i]
-		if c == e && (c == '"' || c == '\'' || c == '`') {
-			cnt++
-			str = str[1:i]
-		} else {
-			break
-		}
-	}
-	return
 }
