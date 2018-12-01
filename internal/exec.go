@@ -9,21 +9,20 @@ func Exec(pref *Preference, dest []*DataSource, file []FileEntity, test bool) (e
 
 	for _, f := range file {
 		log.Printf("[TRACE] exec file=%s\n", f.Path)
-		var sqls *SqlSeg // err is shadowed during return
-		sqls, err = ParseSqls(pref, &f)
-		if err != nil {
-			log.Fatalf("[ERROR] failed to parse sql, err=%v\n", err)
-			return
+		sqls, e := ParseSqls(pref, &f)
+		if e != nil {
+			log.Fatalf("[ERROR] failed to parse sql, err=%v\n", e)
+			return e
 		}
 
 		wg := &sync.WaitGroup{}
 		for _, v := range dest {
 			conn := &MyConn{}
 			log.Printf("[TRACE] trying Db=%s\n", v.Code)
-			err = conn.Open(pref, v)
+			e = conn.Open(pref, v)
 
-			if err != nil {
-				log.Fatalf("[ERROR] failed to open db=%s, err=%v\n", v.Code, err)
+			if e != nil {
+				log.Fatalf("[ERROR] failed to open db=%s, err=%v\n", v.Code, e)
 				continue
 			}
 			log.Printf("[TRACE] opened Db=%s\n", v.Code)
@@ -42,10 +41,10 @@ func Exec(pref *Preference, dest []*DataSource, file []FileEntity, test bool) (e
 	return
 }
 
-func goExec(wg *sync.WaitGroup, sqd *SqlSeg, conn Conn, test bool) {
+func goExec(wg *sync.WaitGroup, sqls []Sql, conn Conn, test bool) {
 	defer wg.Done()
-	c := len(sqd.Segs)
-	for i, v := range sqd.Segs {
+	c := len(sqls)
+	for i, v := range sqls {
 		p := i + 1
 
 		if v.Type != SegCmt {

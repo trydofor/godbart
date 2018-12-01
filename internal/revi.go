@@ -12,7 +12,7 @@ import (
 
 type ReviSeg struct {
 	revi string
-	segs []Seg
+	segs []Sql
 }
 
 func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi string, mask string, test bool) (err error) {
@@ -23,28 +23,27 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi string, 
 		return
 	}
 
-	reviSegs, reviFind, reviCurr := []ReviSeg{}, false, ""
+	var reviSegs []ReviSeg
+	reviFind, reviCurr := false, ""
 	var reviSlt, reviUdp string
 	// 倒序分版本块
 	for k := len(file) - 1; k >= 0; k-- {
 		f := file[k]
 		log.Printf("[TRACE] revi file=%s\n", f.Path)
-		var sqls *SqlSeg // err is shadowed during return
-		sqls, err = ParseSqls(pref, &f)
-		if err != nil {
-			log.Fatalf("[ERROR] failed to parse sql, err=%v\n", err)
-			return
+		sqls, e := ParseSqls(pref, &f)
+		if e != nil {
+			log.Fatalf("[ERROR] failed to parse sql, err=%v\n", e)
+			return e
 		}
 
 		// 按版本分段
-		segs := sqls.Segs
-		numRevi, idxRevi := "", len(segs)-1
+		numRevi, idxRevi := "", len(sqls)-1
 
 		var reviSplit = func(i int) {
-			v := segs[i]
+			v := sqls[i]
 			// find and check SELECT REVI
 			for j := i; j < idxRevi; j++ {
-				w := segs[j]
+				w := sqls[j]
 				if w.Type == SegRow {
 					if len(reviSlt) == 0 {
 						reviSlt = w.Text
@@ -64,13 +63,13 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi string, 
 			if strings.Compare(numRevi, revi) > 0 {
 				log.Printf("[TRACE] IGNORE bigger revi=%s, file=%s, line=%s\n", numRevi, v.File, v.Line)
 			} else {
-				reviSegs = append(reviSegs, ReviSeg{numRevi, segs[i+1 : idxRevi+1]})
+				reviSegs = append(reviSegs, ReviSeg{numRevi, sqls[i+1 : idxRevi+1]})
 				log.Printf("[TRACE] ADD candidate revi=%s, file=%s, line=%s\n", numRevi, v.File, v.Line)
 			}
 		}
 
 		for i := idxRevi; i >= 0; i-- {
-			v := segs[i]
+			v := sqls[i]
 			if v.Type == SegExe {
 				if r := findUpdRevi(v.Text, reviUdp, mreg); len(r) > 0 {
 					if len(reviUdp) == 0 { // first

@@ -2,9 +2,13 @@ package internal
 
 import (
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"os/user"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestEnv(t *testing.T) {
@@ -78,4 +82,26 @@ func prtptr(arr *[]string) {
 	fmt.Printf("arr[0] p=%p\n", &(*arr)[0])
 	fmt.Printf("arr[0] v=%q\n", (*arr)[0])
 	(*arr)[0] = "prtptr"
+}
+
+func TestHttpPost(t *testing.T) {
+	client := &http.Client{}
+	url := ""
+	for i := 0; i < 10; i++ {
+		for a := 'a'; a <= 'z'; a++ {
+			code := fmt.Sprintf("%d---%c", i, a)
+			payload := strings.NewReader("reginvcode=" + code)
+			req, _ := http.NewRequest("POST", url, payload)
+			//设置header
+			req.Header.Add("Connection", "keep-alive")
+			req.Header.Add("Pragma", "no-cache")
+			req.Header.Add("Cache-Control", "no-cache")
+
+			res, _ := client.Do(req)
+			body, _ := ioutil.ReadAll(res.Body)
+			fmt.Printf("\n%s,%s", code, body)
+			res.Body.Close()
+			time.Sleep(3 * time.Second)
+		}
+	}
 }

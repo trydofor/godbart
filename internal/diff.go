@@ -28,7 +28,7 @@ func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, r
 	log.Printf("[TRACE] ===== use `grep -vE '^[0-9]{4}'` to filter =====\n")
 
 	if kind == Create {
-		dbs := []*DataSource{}
+		dbs := make([]*DataSource, 0, len(dest)+1)
 		dbs = append(dbs, srce)
 		dbs = append(dbs, dest...)
 
@@ -94,7 +94,8 @@ func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, r
 		}
 		log.Printf("[TRACE] === diff tbname ===, left=%s, right=%s\n", scon.DbName(), d.DbName())
 
-		rep, ch, ih := strings.Builder{}, true, []string{}
+		rep, ch := strings.Builder{}, true
+		var ih []string
 		head := fmt.Sprintf("\n#TBNAME LEFT(>)=%s, RIGHT(<)=%s", scon.DbName(), d.DbName())
 		for _, k := range stbl {
 			_, ok := dset[k]
@@ -177,12 +178,12 @@ func makeDetail(con *MyConn, tbl []string, dtl map[string]DiffItem) error {
 }
 
 func diffCol(lc, rc map[string]Col, rep *strings.Builder) {
-	ic := []Col{}
+	var ic []Col
 	// 左侧有，右侧没有
 
 	tit := "=Col Only Name"
 	fc := len(tit)
-	for k, _ := range lc {
+	for k := range lc {
 		i := len(k)
 		if i > fc {
 			fc = i
@@ -275,7 +276,7 @@ func diffCol(lc, rc map[string]Col, rep *strings.Builder) {
 		}
 
 		if li.Extr != ri.Extr {
-			ext = fmt.Sprintf("%s:%ts", li.Extr, ri.Extr)
+			ext = fmt.Sprintf("%s:%s", li.Extr, ri.Extr)
 			cnt++
 		}
 
@@ -290,13 +291,13 @@ func diffCol(lc, rc map[string]Col, rep *strings.Builder) {
 }
 
 func diffIdx(lc, rc map[string]Idx, rep *strings.Builder) {
-	ic := []Idx{}
+	var ic []Idx
 	// 左侧有，右侧没有
 	ch, ih := true, true
 
 	tit := "=Idx Only Name"
 	fc := len(tit)
-	for k, _ := range lc {
+	for k := range lc {
 		i := len(k)
 		if i > fc {
 			fc = i
@@ -365,13 +366,13 @@ func diffIdx(lc, rc map[string]Idx, rep *strings.Builder) {
 }
 
 func diffTrg(lc, rc map[string]Trg, rep *strings.Builder) {
-	ic := []Trg{}
+	var ic []Trg
 	// 左侧有，右侧没有
 	ch, ih := true, true
 
 	tit := "=Trg Only Name"
 	fc := len(tit)
-	for k, _ := range lc {
+	for k := range lc {
 		i := len(k)
 		if i > fc {
 			fc = i
@@ -528,7 +529,6 @@ func listTable(conn *MyConn, rgx []*regexp.Regexp) (rst []string, err error) {
 		return tbs, nil
 	}
 
-	rst = []string{}
 	for _, t := range tbs {
 		for _, r := range rgx {
 			if r.MatchString(t) {

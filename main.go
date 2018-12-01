@@ -54,7 +54,7 @@ func checkDest(ctx *cli.Context, cnf *my.Config) []*my.DataSource {
 
 func checkSqls(ctx *cli.Context) (files []my.FileEntity) {
 	flag := ctx.StringSlice("x")
-	sufx := []string{}
+	sufx := make([]string, 0, len(flag))
 	for _, v := range flag {
 		if len(v) > 0 {
 			sufx = append(sufx, strings.ToLower(v))
@@ -208,8 +208,9 @@ func checkKind(ctx *cli.Context) string {
 }
 
 func checkRegx(ctx *cli.Context) []*regexp.Regexp {
-	regx := []*regexp.Regexp{}
-	for _, v := range ctx.Args() {
+	args := ctx.Args()
+	regx := make([]*regexp.Regexp, 0, len(args))
+	for _, v := range args {
 		re, err := regexp.Compile(v)
 		if err != nil {
 			log.Fatalf("[ERROR] failed to compile Regexp %s, %v\n", v, err)
@@ -252,14 +253,14 @@ func diff(ctx *cli.Context) error {
 	return my.Diff(&conf.Preference, srce, dest, kind, tbls)
 }
 
-func move(ctx *cli.Context) error {
+func tree(ctx *cli.Context) error {
 	conf := checkConf(ctx)
 	conf.StartupEnv = checkEnvs(ctx)
 	srce := checkSrce(ctx, conf)
 	dest := checkDest(ctx, conf)
 	test := ctx.Bool("t")
 	sqls := checkSqls(ctx)
-	return my.Move(&conf.Preference, srce, dest, sqls, test)
+	return my.Tree(&conf.Preference, srce, dest, sqls, test)
 }
 
 // cli //
@@ -370,8 +371,8 @@ func main() {
 			Action: diff,
 		},
 		{
-			Name:      "move",
-			Usage:     "move data between dbs",
+			Name:      "tree",
+			Usage:     "move tree data between dbs",
 			ArgsUsage: "some files or paths of SQLs",
 			Flags: []cli.Flag{
 				confFlag,
@@ -380,7 +381,7 @@ func main() {
 				envsFlag,
 				testFlag,
 			},
-			Action: move,
+			Action: tree,
 		},
 	}
 
