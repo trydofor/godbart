@@ -102,6 +102,15 @@ REPLACE INTO sys_schema_version (version, created) VALUES( 2018022801, NOW());
 
 对一个或多个数据库的表结构，能够生成表字段加索引，trigger的创建DDL。
 
+过程信息使用log输出stderr(`2`)。结果信息使用stdout(`1`)输出。因此可以分离信息。
+
+ * `> main-2018-diff-out.log` 结果直接保存文件，控制台不输出。
+ * `2> main-2018-diff-err.log` 过程保存文件，控制台不输出。
+ * `&> main-2018-diff-all.log` 全部保存文件，控制台不输出。
+ * `| tee main-2018-diff-out.log` 结果保存文件，且控制台输出。
+ * `2>&1| tee >(grep -vE '^[0-9]{4}' > main-2018-diff-out.log)` 同上。
+ * `2>&1| tee main-2018-diff-all.log` 全部保存文件，且控制台输出。
+
 ```bash
 # 对表名，字段，索引，触发器都进行比较，并保存结果到 main-2018-diff.log
 ./godbart diff \
@@ -110,7 +119,7 @@ REPLACE INTO sys_schema_version (version, created) VALUES( 2018022801, NOW());
  -d prd_2018 \
  -k detail \
  'tx_.*' \
- 2>&1| tee >(grep -vE '^[0-9]{4}' > main-2018-diff.log)
+> main-2018-diff-out.log
 ```
 
  * `-s` 为左侧比较相，可以零或一。
@@ -125,10 +134,21 @@ REPLACE INTO sys_schema_version (version, created) VALUES( 2018022801, NOW());
 
 `表明细Detail`的内容格式中，用`>`表示只有左侧存在，`<`表示只有右侧存在。
 
-golang的log默认使用`2`(stderr)管道输出，所以用`2>&1`重定向到`stdout`，
-因此用`2>&1| tee >(grep -vE '^[0-9]{4}' > out.log) |less`来分离输出。
 
 ## 4.数据迁移 Tree
+
+```bash
+# 对表名，字段，索引，触发器都进行比较，并保存结果到 main-2018-diff.log
+./godbart tree \
+ -c godbart.toml \
+ -s prd_main \
+ -d prd_2018 \
+ -x .sql -x .xsql \
+ -e "DATE_FROM=2018-11-23 12:34:56"
+ -t \
+ demo/sql/tree/tree.sql
+ > main-tree-out.log
+```
 
 数据活性，不同业务场景有不同的定义，比如按日期，按ID范围，甚至ID取余。
 本功能只支持静态分库，即对既有数据，在执行前已预知数据范围和目标数据库。
@@ -246,11 +266,13 @@ SELECT * FROM tx_parcel_event WHERE parcel_id = 1234567890;
  * `VAL[2]` 表示获得第2个值
  
  其中，角标从1开始。引用为数组时，`[]`内要制定分隔符，默认时`,`。
- 即，`COL[]`和`COL[,]`相同。同时存在多个分隔符时，取第一个。
+ 即，`COL[]`和`COL[,]`相同。存在多个分隔符时，只取第一个非空的。
+ 分隔符，不能用数字，因为做角标；不能用`[]`，因为你懂的。
 
 ### 5.3.静态替换 STR
 
 `STR`与`ENV`和`REF`不同，采用的是静态替换字符串。可以对结果集或占位符使用。
+`STR` 可以用 `ENV`和`REF` 的`变量`，也以用`占位`重新定义。
 
 `脱引号`处理，当`变量`和`占位`具有相同的引号规则，则同时脱去最外的一层引号。
 此规则只对`STR`有效，因为其变量部分，可以重定义其他有引号的`占位`。
@@ -258,8 +280,16 @@ SELECT * FROM tx_parcel_event WHERE parcel_id = 1234567890;
 `加引号`处理，如果`脱引号`后，`变量`仍有引号包围，那么替换时会增加包围的引号。
 因为此规则的存在，当`变量`必须带引号时，需要先`REF`在`STR`才能正确的处理。
 
-`模式展开`，定义的`变量`和`占位`的模式若是相同， 即脱引号处理后，不被引号全包围，
-且被可空格分割，则可进行展开，用来处理数组循环或简化语义。如下例中的 SET部分
+`模式展开`，`变量`中有多个多值内容`COL[*]`或`VAL[*]`时，可以展开。
+`模式展开`限制比较多，因为不想简单的事情搞复杂了。
+
+ - 首先脱引号处理。
+ - 只支持直接定义，不支持重新定义。
+ - 除了`COL[*]`和`VAL[*]`外，都作为静态字符串处理，不会深度展开。
+ - 只支持`\t`,`\n`，`\\`转移。
+ - `COL[*]`部分，使用静态替换。
+ - `VAL[*]`部分，仍然使用PreparedStatement形式执行。
+ 
 
 ```mysql
 -- REF Y4 '2018-00-00 00:00:00'
@@ -282,7 +312,7 @@ INSERT INTO tx_parcel (`id`) VALUES ('占位值');
 
 UPDATE tx_parcel SET logno = -99009 WHERE id=990001;
 -- 替换后
-UPDATE tx_parcel SET `id` = VAL[1] ,`create_time` = VAL[2] /*循环加下去，逗号分割*/ WHERE id=990001;
+UPDATE tx_parcel SET `id` = ? ,`create_time` = ? /*循环加下去，逗号分割*/ WHERE id=990001;
 ```
 
 ### 5.4.条件执行 RUN
@@ -307,6 +337,9 @@ REPLACE INTO sys_hot_separation(table_name, checked_id, checked_tm) VALUES
 ### 5.5.输出执行 OUT
 
 与条件执行 `RUN` 一样的定义，只是不在源DB上执行，而是在目标DB上执行。
+
+注意，在有`定义Def`结果集（`REF`或`STR`直接定义）的语句上，不能使用`OUT`。
+因为一个`占位`在运行时存在多值的情况，从而导致语义混乱或执行时错误。
 
 ```mysql
 -- ENV DATE_FROM '2018-11-23 12:34:56'

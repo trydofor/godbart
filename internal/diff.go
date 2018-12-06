@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"regexp"
@@ -23,9 +22,7 @@ type DiffItem struct {
 
 var DiffKinds = []string{TbName, Detail, Create}
 
-func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regexp) (err error) {
-
-	log.Printf("[TRACE] ===== use `grep -vE '^[0-9]{4}'` to filter =====\n")
+func Diff(srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regexp) error {
 
 	if kind == Create {
 		dbs := make([]*DataSource, 0, len(dest)+1)
@@ -33,46 +30,33 @@ func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, r
 		dbs = append(dbs, dest...)
 
 		if len(dbs) == 0 {
-			log.Fatalf("[ERROR] no db to show create\n")
-			return
+			return errorAndLog("[ERROR] no db to show create")
 		}
 
 		for _, db := range dbs {
-			conn := &MyConn{}
-			log.Printf("[TRACE] trying Db=%s\n", db.Code)
-			err = conn.Open(pref, db)
-			if err != nil {
-				log.Fatalf("[ERROR] failed to open db=%s, err=%v\n", conn.DbName(), err)
-				return
+			conn, er := openDbAndLog(db)
+			if er != nil {
+				return er
 			}
 			showCreate(conn, rgx)
 		}
-		return
+		return nil
 	}
 
 	if srce == nil {
-		s := fmt.Sprintf("[ERROR] need source db to diff, kind=%s\n", kind)
-		log.Fatal(s)
-		err = errors.New(s)
-		return
+		return errorAndLog("[ERROR] need source db to diff, kind=%s\n", kind)
 	}
 
-	scon := &MyConn{}
-	log.Printf("[TRACE] trying source Db=%s\n", srce.Code)
-	err = scon.Open(pref, srce)
+	scon, err := openDbAndLog(srce)
 	if err != nil {
-		log.Fatalf("[ERROR] failed to open srouce db=%s, err=%v\n", scon.DbName(), err)
-		return
+		return err
 	}
 
 	dcon := make([]*MyConn, len(dest))
-	for i, d := range dest {
-		conn := &MyConn{}
-		log.Printf("[TRACE] trying destination Db=%s\n", d.Code)
-		err = conn.Open(pref, d)
-		if err != nil {
-			log.Fatalf("[ERROR] failed to open destination db=%s, err=%v\n", conn.DbName(), err)
-			return
+	for i, db := range dest {
+		conn, er := openDbAndLog(db)
+		if er != nil {
+			return er
 		}
 		dcon[i] = conn
 	}
@@ -86,68 +70,68 @@ func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, r
 	detail := kind == Detail
 	sdtl := make(map[string]DiffItem)
 
-	for _, d := range dcon {
-		dtbl, dset, err := makeTbname(d, rgx)
-		if err != nil {
-			log.Fatalf("[ERROR] failed to list tables, db=%s, err=%v\n", d.DbName(), err)
-			return err
+	for _, con := range dcon {
+		dtbl, dset, er := makeTbname(con, rgx)
+		if er != nil {
+			log.Fatalf("[ERROR] failed to list tables, db=%s, err=%v\n", con.DbName(), er)
+			return er
 		}
-		log.Printf("[TRACE] === diff tbname ===, left=%s, right=%s\n", scon.DbName(), d.DbName())
+		log.Printf("[TRACE] === diff tbname ===, left=%s, right=%s\n", scon.DbName(), con.DbName())
 
 		rep, ch := strings.Builder{}, true
 		var ih []string
-		head := fmt.Sprintf("\n#TBNAME LEFT(>)=%s, RIGHT(<)=%s", scon.DbName(), d.DbName())
-		for _, k := range stbl {
-			_, ok := dset[k]
-			if ok {
-				ih = append(ih, k)
+		head := fmt.Sprintf("\n#TBNAME LEFT(>)=%s, RIGHT(<)=%s", scon.DbName(), con.DbName())
+		for _, tbl := range stbl {
+			if dset[tbl] {
+				ih = append(ih, tbl)
 			} else {
 				if ch {
 					ch = false
 					rep.WriteString(head)
 				}
 				rep.WriteString("\n>")
-				rep.WriteString(k)
+				rep.WriteString(tbl)
 			}
 		}
 
-		for _, k := range dtbl {
-			_, ok := sset[k]
-			if !ok {
+		for _, tbl := range dtbl {
+			if sset[tbl] {
 				if ch {
 					ch = false
 					rep.WriteString(head)
 				}
 
 				rep.WriteString("\n<")
-				rep.WriteString(k)
+				rep.WriteString(tbl)
 			}
 		}
 
 		if detail {
-			log.Printf("[TRACE] === diff detail ===, left=%s, right=%s\n", scon.DbName(), d.DbName())
+			log.Printf("[TRACE] === diff detail ===, left=%s, right=%s\n", scon.DbName(), con.DbName())
 
-			err = makeDetail(scon, ih, sdtl) // 比较多库，逐步添加表
-			if err != nil {
-				return err
+			e1 := makeDetail(scon, ih, sdtl) // 比较多库，逐步添加表
+			if e1 != nil {
+				return e1
 			}
+
 			ddtl := make(map[string]DiffItem) // 当前比较项
-			err = makeDetail(d, ih, ddtl)
-			if err != nil {
-				return err
+			e2 := makeDetail(con, ih, ddtl)
+			if e2 != nil {
+				return e2
 			}
 
-			diffDetail(sdtl, ddtl, &rep, scon.DbName(), d.DbName())
+			diffDetail(sdtl, ddtl, &rep, scon.DbName(), con.DbName())
 		}
 
 		if rep.Len() > 0 {
-			log.Println(rep.String())
+			log.Printf("[TRACE] == HAS SOME DIFF ==. LEFT=%s, RIGHT=%s\n", scon.DbName(), con.DbName())
+			fmt.Println(rep.String())
 		} else {
-			log.Printf("== ALL THE SAME ==. LEFT=%s, RIGHT=%s\n", scon.DbName(), d.DbName())
+			log.Printf("[TRACE] == ALL THE SAME ==. LEFT=%s, RIGHT=%s\n", scon.DbName(), con.DbName())
 		}
 	}
 
-	return
+	return nil
 }
 
 func makeDetail(con *MyConn, tbl []string, dtl map[string]DiffItem) error {
@@ -462,15 +446,15 @@ func diffDetail(lit, rit map[string]DiffItem, rep *strings.Builder, ldb, rdb str
 	}
 }
 
-func makeTbname(conn *MyConn, rgx []*regexp.Regexp) (rst []string, set map[string]*string, err error) {
+func makeTbname(conn *MyConn, rgx []*regexp.Regexp) (rst []string, set map[string]bool, err error) {
 	rst, err = listTable(conn, rgx)
 	if err != nil {
 		return
 	}
 
-	set = make(map[string]*string)
+	set = make(map[string]bool)
 	for _, v := range rst {
-		set[v] = nil
+		set[v] = true
 	}
 
 	return
@@ -496,7 +480,7 @@ func showCreate(conn *MyConn, rgx []*regexp.Regexp) {
 		if e != nil {
 			log.Fatalf("[ERROR] db=%s, failed to dll table=%s\n", conn.DbName(), v)
 		} else {
-			log.Printf("[TRACE] \n-- db=%s, %d/%d, table=%s\n%s", conn.DbName(), i+1, c, v, tb)
+			fmt.Printf("\n-- db=%s, %d/%d, table=%s\n%s", conn.DbName(), i+1, c, v, tb)
 		}
 
 		tgs, e := conn.Triggers(v)
@@ -508,7 +492,7 @@ func showCreate(conn *MyConn, rgx []*regexp.Regexp) {
 				if r != nil {
 					log.Fatalf("[ERROR] db=%s, failed to ddl trigger=%s, table=%s\n", conn.DbName(), g.Name, v)
 				} else {
-					log.Printf("[TRACE] \n-- db=%s, trigger=%s, table=%s\n%s", conn.DbName(), g.Name, v, tg)
+					fmt.Printf("\n-- db=%s, trigger=%s, table=%s\n%s", conn.DbName(), g.Name, v, tg)
 				}
 			}
 		}
@@ -519,7 +503,8 @@ func showCreate(conn *MyConn, rgx []*regexp.Regexp) {
 
 func listTable(conn *MyConn, rgx []*regexp.Regexp) (rst []string, err error) {
 
-	tbs, err := conn.Tables()
+	var tbs []string
+	tbs, err = conn.Tables()
 	if err != nil {
 		log.Fatalf("[ERROR] failed to show tables db=%s, err=%v\n", conn.DbName(), err)
 		return

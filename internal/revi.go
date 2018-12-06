@@ -2,7 +2,6 @@ package internal
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"log"
 	"regexp"
@@ -15,30 +14,26 @@ type ReviSeg struct {
 	segs []Sql
 }
 
-func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi string, mask string, test bool) (err error) {
+func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi string, mask string, risk bool) error {
 
 	mreg, err := regexp.Compile(mask)
 	if err != nil {
 		log.Fatalf("[ERROR] failed to compile mask=%s, err=%v\n", mask, err)
-		return
+		return err
 	}
 
 	var reviSegs []ReviSeg
 	reviFind, reviCurr := false, ""
 	var reviSlt, reviUdp string
+
 	// 倒序分版本块
 	for k := len(file) - 1; k >= 0; k-- {
 		f := file[k]
 		log.Printf("[TRACE] revi file=%s\n", f.Path)
-		sqls, e := ParseSqls(pref, &f)
-		if e != nil {
-			log.Fatalf("[ERROR] failed to parse sql, err=%v\n", e)
-			return e
-		}
+		sqls := ParseSqls(pref, &f)
 
 		// 按版本分段
 		numRevi, idxRevi := "", len(sqls)-1
-
 		var reviSplit = func(i int) {
 			v := sqls[i]
 			// find and check SELECT REVI
@@ -50,9 +45,7 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi string, 
 						log.Printf("[TRACE] find SLT-REVI-SQL, file=%s, line=%s, sql=%s\n", w.File, w.Line, w.Text)
 					} else {
 						if reviSlt != w.Text {
-							s := fmt.Sprintf("[ERROR] SLT-REVI-SQL changed, file=%s, line=%s, sql=%s\n", w.File, w.Line, w.Text)
-							log.Fatal(s)
-							err = errors.New(s)
+							err = errorAndLog("[ERROR] SLT-REVI-SQL changed, file=%s, line=%s, sql=%s\n", w.File, w.Line, w.Text)
 							return
 						}
 					}
@@ -84,10 +77,7 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi string, 
 						reviCurr = r
 					} else {
 						if strings.Compare(reviCurr, r) <= 0 {
-							s := fmt.Sprintf("[ERROR] need uniq&asc revi, but %s <= %s. file=%s, line=%s, sql=%s\n", reviCurr, r, v.File, v.Line, v.Text)
-							log.Fatal(s)
-							err = errors.New(s)
-							return
+							return errorAndLog("[ERROR] need uniq&asc revi, but %s <= %s. file=%s, line=%s, sql=%s\n", reviCurr, r, v.File, v.Line, v.Text)
 						}
 					}
 
@@ -112,18 +102,12 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi string, 
 	}
 
 	if !reviFind {
-		s := fmt.Sprintf("[ERROR] can not find assigned revi=%s\n", revi)
-		log.Fatal(s)
-		err = errors.New(s)
-		return
+		return errorAndLog("[ERROR] can not find assigned revi=%s\n", revi)
 	}
 
 	lastIdx := len(reviSegs) - 1
 	if lastIdx < 0 {
-		s := fmt.Sprintf("[ERROR] no sqls to run for revi=%s\n", revi)
-		log.Fatal(s)
-		err = errors.New(s)
-		return
+		return errorAndLog("[ERROR] no sqls to run for revi=%s\n", revi)
 	}
 
 	if len(reviSlt) == 0 {
@@ -138,27 +122,21 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi string, 
 	// run
 	wg := &sync.WaitGroup{}
 	for _, v := range dest {
-		conn := &MyConn{}
-		log.Printf("[TRACE] trying Db=%s\n", v.Code)
-		err = conn.Open(pref, v)
-
-		if err != nil {
-			log.Fatalf("[ERROR] failed to open db=%s, err=%v\n", v.Code, err)
+		conn, er := openDbAndLog(v)
+		if er != nil {
 			continue
 		}
-		log.Printf("[TRACE] opened Db=%s\n", v.Code)
 
 		wg.Add(1)
-		if test {
-			goRevi(wg, reviSegs, conn, reviSlt, mreg, test)
+		if risk {
+			go goRevi(wg, reviSegs, conn, reviSlt, mreg, risk)
 		} else {
-			go goRevi(wg, reviSegs, conn, reviSlt, mreg, test)
+			goRevi(wg, reviSegs, conn, reviSlt, mreg, risk)
 		}
-
 	}
 
 	wg.Wait()
-	return
+	return nil
 }
 
 func findUpdRevi(updSeg string, updRevi string, mask *regexp.Regexp) (revi string) {
@@ -170,7 +148,7 @@ func findUpdRevi(updSeg string, updRevi string, mask *regexp.Regexp) (revi strin
 	return mask.FindString(updSeg)
 }
 
-func goRevi(wg *sync.WaitGroup, segs []ReviSeg, conn Conn, slt string, mask *regexp.Regexp, test bool) {
+func goRevi(wg *sync.WaitGroup, segs []ReviSeg, conn Conn, slt string, mask *regexp.Regexp, risk bool) {
 	defer wg.Done()
 
 	sc := len(segs)
@@ -191,7 +169,7 @@ func goRevi(wg *sync.WaitGroup, segs []ReviSeg, conn Conn, slt string, mask *reg
 		if r1.Valid {
 			revi = r1.String
 			if !mask.MatchString(revi) {
-				return errors.New(fmt.Sprintf("[ERROR] revi not matched. revi=%s on db=%s use sql=%s\n", revi, conn.DbName(), slt))
+				return errorAndLog(fmt.Sprintf("[ERROR] revi not matched. revi=%s on db=%s use sql=%s\n", revi, conn.DbName(), slt))
 			}
 		} else {
 			log.Printf("[TRACE] get NULL revi on db=%s use sql=%s\n", conn.DbName(), slt)
@@ -230,8 +208,8 @@ func goRevi(wg *sync.WaitGroup, segs []ReviSeg, conn Conn, slt string, mask *reg
 				continue
 			}
 
-			if test {
-				log.Printf("[DEBUG] db=%s, %d/%d, TEST, NOT run. revi=%s, file=%s ,line=%s\n", conn.DbName(), p, c, s.revi, v.File, v.Line)
+			if !risk {
+				fmt.Printf("\n-- db=%s, %d/%d, revi=%s, file=%s ,line=%s\n%s", conn.DbName(), p, c, s.revi, v.File, v.Line, v.Text)
 				continue
 			}
 

@@ -9,6 +9,10 @@ delimitercmd = 'DELIMITER'
 # 单多行注释，正则处理，不做语法分析
 linecomment = '--'
 multcomment = ['/*','*/']
+
+# 日期格式化
+fmtdatetime='2006-01-02 15:04:05.000'
+
 # 连接池有关的，sql.DB一致
 connmaxopen = 10
 connmaxidel = 2

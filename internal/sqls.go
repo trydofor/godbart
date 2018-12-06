@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"log"
 	"strings"
 )
 
@@ -20,19 +21,22 @@ type Sql struct {
 	Text string // 正文部分
 }
 
-func ParseSqls(pref *Preference, file *FileEntity) (sqls []Sql, err error) {
+type Sqls []Sql
+
+func ParseSqls(pref *Preference, file *FileEntity) Sqls {
+	log.Printf("[TRACE] parse Sqls, file=%s\n", file.Path)
 
 	lines := splitLinex(file.Text)
 	sbgn, mbgn, tbgn := -1, -1, -1
 
 	llen := len(lines)
-	sqls = make([]Sql, 0, 32)
+	sqls := make([]Sql, 0, 32)
 	dt, dc := pref.DelimiterRaw, pref.DelimiterCmd
 
 	for i, line := range lines {
 
 		//多行注释开始
-		if isCommentBgn(pref, line) {
+		if isCmntMBgn(pref, line) {
 			parseStatement(&sqls, lines, file.Path, &tbgn, i-1, &dt, dc)
 			mbgn = i
 			continue
@@ -40,14 +44,14 @@ func ParseSqls(pref *Preference, file *FileEntity) (sqls []Sql, err error) {
 
 		// 多行注释结束
 		if mbgn >= 0 {
-			if isCommentEnd(pref, line) {
+			if isCmntMEnd(pref, line) {
 				parseComment(&sqls, lines, file.Path, &mbgn, i)
 			}
 			continue
 		}
 
 		// 单行注释开始
-		if isCommentLine(pref, line) {
+		if isCmntLine(pref, line) {
 			parseStatement(&sqls, lines, file.Path, &tbgn, i-1, &dt, dc)
 			if sbgn < 0 {
 				sbgn = i
@@ -84,7 +88,7 @@ func ParseSqls(pref *Preference, file *FileEntity) (sqls []Sql, err error) {
 		parseStatement(&sqls, lines, file.Path, &tbgn, l, &dt, dc)
 	}
 
-	return
+	return sqls
 }
 
 func parseComment(segs *[]Sql, lines []string, name string, b *int, e int) {
@@ -95,10 +99,11 @@ func parseComment(segs *[]Sql, lines []string, name string, b *int, e int) {
 	i := e + 1
 	text := strings.Join(lines[*b:i], Joiner)
 	head := *b + 1
+	line := fmt.Sprintf("%d:%d", head, i)
 	*segs = append(*segs, Sql{
-		fmt.Sprintf("%d:%d", head, i), head, SegCmt, name, text,
+		line, head, SegCmt, name, text,
 	})
-
+	log.Printf("[TRACE]   parsed Comment, line=%s\n", line)
 	*b = -1
 }
 
@@ -130,13 +135,15 @@ func parseStatement(segs *[]Sql, lines []string, name string, b *int, e int, dt 
 				dtl = len(*dt)
 				if lns < i { // 结束上一段
 					head := lns + 1
+					line := fmt.Sprintf("%d:%d", head, i)
 					*segs = append(*segs, Sql{
-						fmt.Sprintf("%d:%d", head, i),
+						line,
 						head,
 						typ(lines[lns]),
 						name,
 						strings.Join(lines[lns:i], Joiner),
 					})
+					log.Printf("[TRACE]   parsed Statement, line=%s\n", line)
 				}
 				lns = n
 				// fmt.Printf("\t\tget new delimitor [%s] at line %d\n", *dt, n)
@@ -148,13 +155,15 @@ func parseStatement(segs *[]Sql, lines []string, name string, b *int, e int, dt 
 		if dtl > 0 && l > dtl && strings.EqualFold(*dt, lines[i][dtp:]) { // 结束符
 			lines[i] = lines[i][0:dtp]
 			head := lns + 1
+			line := fmt.Sprintf("%d:%d", head, n)
 			*segs = append(*segs, Sql{
-				fmt.Sprintf("%d:%d", head, n),
+				line,
 				head,
 				typ(lines[lns]),
 				name,
 				strings.Join(lines[lns:n], Joiner),
 			})
+			log.Printf("[TRACE]   parsed Statement, line=%s\n", line)
 			lns = n
 			// fmt.Printf("\t\tget the delimitor at line %d\n", n)
 		}
@@ -162,27 +171,30 @@ func parseStatement(segs *[]Sql, lines []string, name string, b *int, e int, dt 
 
 	if lns < lne {
 		head := lns + 1
+		line := fmt.Sprintf("%d:%d", head, lne)
 		*segs = append(*segs, Sql{
-			fmt.Sprintf("%d:%d", head, lne),
+			line,
 			head,
 			typ(lines[lns]),
 			name,
 			strings.Join(lines[lns:lne], Joiner),
 		})
+		log.Printf("[TRACE]   parsed Statement, line=%s\n", line)
 	}
+
 	*b = -1
 }
 
 // helper
 
-func isCommentLine(pref *Preference, str string) bool {
+func isCmntLine(pref *Preference, str string) bool {
 	if pref.LineComment == "" {
 		return false
 	}
 	return strings.HasPrefix(str, pref.LineComment)
 }
 
-func isCommentBgn(pref *Preference, str string) bool {
+func isCmntMBgn(pref *Preference, str string) bool {
 	l := len(pref.MultComment)
 	if l < 2 {
 		return false
@@ -196,7 +208,7 @@ func isCommentBgn(pref *Preference, str string) bool {
 	return false
 }
 
-func isCommentEnd(pref *Preference, str string) bool {
+func isCmntMEnd(pref *Preference, str string) bool {
 	l := len(pref.MultComment)
 	if l < 2 {
 		return false

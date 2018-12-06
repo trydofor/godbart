@@ -15,8 +15,7 @@ func Test_ParseSql(t *testing.T) {
 	bytes, err := ioutil.ReadFile(file)
 	panicIfErr(err)
 
-	sqls, err := ParseSqls(pref, &FileEntity{file, string(bytes)})
-	panicIfErr(err)
+	sqls := ParseSqls(pref, &FileEntity{file, string(bytes)})
 
 	fmt.Println("segs------")
 	for _, x := range sqls {

@@ -11,14 +11,14 @@ import (
 	"time"
 )
 
-func TestEnv(t *testing.T) {
+func Test_Env(t *testing.T) {
 	name, _ := os.Hostname()
 	fmt.Println(name)
 	current, _ := user.Current()
 	fmt.Println(current.Username)
 }
 
-func TestAppend(t *testing.T) {
+func Test_Append(t *testing.T) {
 	arr := []string{"0"}
 	fmt.Printf("arr p=%p, l=%d, arr[-1]=%q\n", &arr, len(arr), arr[len(arr)-1])
 	appval(arr)
@@ -42,7 +42,7 @@ func appptr(arr *[]string) {
 	}
 }
 
-func TestPoint(t *testing.T) {
+func Test_Point(t *testing.T) {
 
 	arr := []string{"1", "2", "3"}
 	fmt.Println("----")
@@ -84,7 +84,7 @@ func prtptr(arr *[]string) {
 	(*arr)[0] = "prtptr"
 }
 
-func TestHttpPost(t *testing.T) {
+func Test_HttpPost(t *testing.T) {
 	client := &http.Client{}
 	url := ""
 	for i := 0; i < 10; i++ {

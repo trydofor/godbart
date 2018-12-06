@@ -17,6 +17,7 @@ type Preference struct {
 	DelimiterCmd string
 	LineComment  string
 	MultComment  []string
+	FmtDateTime  string
 	ConnMaxOpen  int
 	ConnMaxIdel  int
 }
@@ -46,6 +47,7 @@ func ParseToml(text string) (config *Config, err error) {
 	delimitercmd := prefTree.Get("delimitercmd").(string)
 	linecomment := prefTree.Get("linecomment").(string)
 	multcomment := toArrString(prefTree.Get("multcomment"))
+	fmtdatetime := prefTree.Get("fmtdatetime").(string)
 	connmaxopen := prefTree.Get("connmaxopen").(int64)
 	connmaxidel := prefTree.Get("connmaxidel").(int64)
 
@@ -60,6 +62,7 @@ func ParseToml(text string) (config *Config, err error) {
 		delimitercmd,
 		linecomment,
 		multcomment,
+		fmtdatetime,
 		int(connmaxopen),
 		int(connmaxidel),
 	}
