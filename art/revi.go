@@ -1,4 +1,4 @@
-package internal
+package art
 
 import (
 	"database/sql"
@@ -64,14 +64,19 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi string, 
 		for i := idxRevi; i >= 0; i-- {
 			v := sqls[i]
 			if v.Type == SegExe {
-				if r := findUpdRevi(v.Text, reviUdp, mreg); len(r) > 0 {
-					if len(reviUdp) == 0 { // first
-						log.Printf("[TRACE] find UPD-REVI-SQL, revi=%s, file=%s, line=%s, sql=%s\n", r, v.File, v.Line, v.Text)
-						p := strings.Index(v.Text, r)
-						reviUdp = strings.ToLower(removeWhite(v.Text[0:p]))
-					} else {
-						log.Printf("[TRACE] find more revi=%s, file=%s, line=%s\n", r, v.File, v.Line)
+				r := findUpdRevi(v.Text, reviUdp, mreg)
+
+				if len(reviUdp) == 0 { // first
+					if len(r) == 0 {
+						return errorAndLog("[ERROR] REVI not matches in the last sql. file=%s, line=%s, sql=%s\n", v.File, v.Line, v.Text)
 					}
+					log.Printf("[TRACE] find UPD-REVI-SQL, revi=%s, file=%s, line=%s, sql=%s\n", r, v.File, v.Line, v.Text)
+					p := strings.Index(v.Text, r)
+					reviUdp = strings.ToLower(removeWhite(v.Text[0:p]))
+				}
+
+				if len(r) > 0 {
+					log.Printf("[TRACE] find more revi=%s, file=%s, line=%s\n", r, v.File, v.Line)
 
 					if len(reviCurr) == 0 {
 						reviCurr = r
@@ -129,9 +134,9 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi string, 
 
 		wg.Add(1)
 		if risk {
-			go goRevi(wg, reviSegs, conn, reviSlt, mreg, risk)
+			go goRevi(wg, pref, reviSegs, conn, reviSlt, mreg, risk)
 		} else {
-			goRevi(wg, reviSegs, conn, reviSlt, mreg, risk)
+			goRevi(wg, pref, reviSegs, conn, reviSlt, mreg, risk)
 		}
 	}
 
@@ -148,14 +153,11 @@ func findUpdRevi(updSeg string, updRevi string, mask *regexp.Regexp) (revi strin
 	return mask.FindString(updSeg)
 }
 
-func goRevi(wg *sync.WaitGroup, segs []ReviSeg, conn Conn, slt string, mask *regexp.Regexp, risk bool) {
+func goRevi(wg *sync.WaitGroup, pref *Preference, revs []ReviSeg, conn Conn, slt string, mask *regexp.Regexp, risk bool) {
 	defer wg.Done()
 
-	sc := len(segs)
-	log.Printf("[TRACE] find %d revis to run on db=%s\n", sc, conn.DbName())
-
 	var revi string
-	var sn = func(rs *sql.Rows) (err error) {
+	var slv = func(rs *sql.Rows) (err error) {
 		var cols []string
 		cols, err = rs.Columns()
 		if err != nil || len(cols) != 1 {
@@ -178,47 +180,67 @@ func goRevi(wg *sync.WaitGroup, segs []ReviSeg, conn Conn, slt string, mask *reg
 		return
 	}
 
-	err := conn.Query(sn, slt)
+	err := conn.Query(slv, slt)
 	if err != nil {
 		if strings.Contains(fmt.Sprintf("%v", err), "Error 1146") {
-			log.Printf("[TRACE] Table not exist on db=%s use sql=%s, err=%v\n", conn.DbName(), slt, err)
+			log.Printf("[TRACE] Table not exist, db=%s use sql=%s\n", conn.DbName(), slt)
 		} else {
 			log.Fatalf("[ERROR] failed to select revision on db=%s use sql=%s, err=%v\n", conn.DbName(), slt, err)
 			return
 		}
 	}
 
-	log.Printf("[TRACE] get revi=%s on db=%s use sql=%s\n", revi, conn.DbName(), slt)
+	if len(revi) == 0 {
+		log.Printf("[TRACE] empty revi means always run. db=%s use sql=%s\n", conn.DbName(), slt)
+	} else {
+		log.Printf("[TRACE] get revi=%s on db=%s use sql=%s\n", revi, conn.DbName(), slt)
+	}
 
 	// run
-	for j, s := range segs {
+	cur, cnt := 0, 0
+	for _, s := range revs {
+		for _, v := range s.segs {
+			if v.Type != SegCmt {
+				cnt++
+			}
+		}
+	}
+
+	cmn, dlt := pref.LineComment, pref.DelimiterRaw
+	for _, s := range revs {
 
 		if len(revi) > 0 && strings.Compare(s.revi, revi) <= 0 {
-			log.Printf("[TRACE] ===Run=== ignore smaller. db=%s, %d/%d, revi=%s, db-revi=%s\n", conn.DbName(), j+1, sc, s.revi, revi)
+			for _, v := range s.segs {
+				if v.Type != SegCmt {
+					cnt--
+				}
+			}
+			log.Printf("[TRACE] ===Run=== ignore smaller. db=%s, revi=%s, db-revi=%s\n", conn.DbName(), s.revi, revi)
 			continue
 		}
 
-		c := len(s.segs)
-		log.Printf("[TRACE] ===Run=== db=%s, %d/%d, revi=%s\n", conn.DbName(), j+1, sc, s.revi)
-
-		for i, v := range s.segs {
-			p := i + 1
-
+		log.Printf("[TRACE] ===Run=== db=%s, revi=%s, sqls=%d\n", conn.DbName(), s.revi, len(s.segs))
+		for _, v := range s.segs {
 			if v.Type == SegCmt {
 				continue
 			}
 
+			cur++
 			if !risk {
-				fmt.Printf("\n-- db=%s, %d/%d, revi=%s, file=%s ,line=%s\n%s", conn.DbName(), p, c, s.revi, v.File, v.Line, v.Text)
+				// 不处理 trigger 新结束符问题。
+				if strings.Contains(v.Text, dlt) {
+					fmt.Printf("\n%s find '%s', May Need '%s' to avoid", cmn, dlt, pref.DelimiterCmd)
+				}
+				fmt.Printf("\n%s db=%s, %d/%d, revi=%s, file=%s ,line=%s\n%s%s\n", cmn, conn.DbName(), cur, cnt, s.revi, v.File, v.Line, v.Text, dlt)
 				continue
 			}
 
-			cnt, err := conn.Exec(v.Text)
+			a, err := conn.Exec(v.Text)
 			if err != nil {
-				log.Fatalf("[ERROR] db=%s, %d/%d, failed to revi sql, revi=%s, file=%s, line=%s, err=%v\n", conn.DbName(), p, c, s.revi, v.File, v.Line, err)
+				log.Fatalf("[ERROR] db=%s, %d/%d, failed to revi sql, revi=%s, file=%s, line=%s, err=%v\n", conn.DbName(), cur, cnt, s.revi, v.File, v.Line, err)
 				break
 			} else {
-				log.Printf("[TRACE] db=%s, %d/%d, %d affects. revi=%s, file=%s, line=%s\n", conn.DbName(), p, c, cnt, s.revi, v.File, v.Line)
+				log.Printf("[TRACE] db=%s, %d/%d, %d affects. revi=%s, file=%s, line=%s\n", conn.DbName(), cur, cnt, a, s.revi, v.File, v.Line)
 			}
 		}
 	}

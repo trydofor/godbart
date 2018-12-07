@@ -1,4 +1,4 @@
-package internal
+package art
 
 import (
 	"errors"
@@ -32,6 +32,7 @@ func openDbAndLog(db *DataSource) (conn *MyConn, err error) {
 	return
 }
 
+// public
 func ExitIfError(err error, code int, format string, args ...interface{}) {
 	if err != nil {
 		args = append(args, err)
@@ -47,36 +48,55 @@ func ExitIfTrue(tru bool, code int, format string, args ...interface{}) {
 	}
 }
 
+const (
+	EnvUser      = "USER"
+	EnvHost      = "HOST"
+	EnvDate      = "DATE"
+	EnvRule      = "ENV-CHECK-RULE"
+	EnvRuleError = "ERROR"
+	EnvRuleEmpty = "EMPTY"
+)
+
 func BuiltinEnvs(envs map[string]string) {
 
-	if _, ok := envs["USER"]; !ok {
+	if _, ok := envs[EnvUser]; !ok {
 		cu, err := user.Current()
 		if err == nil {
-			envs["USER"] = cu.Username
-			log.Printf("[TRACE] put builtin env, k=USER, v=%q\n", cu.Username)
+			envs[EnvUser] = cu.Username
+			log.Printf("[TRACE] put builtin env, k=%s, v=%q\n", EnvUser, cu.Username)
 		} else {
-			envs["USER"] = ""
-			log.Fatalf("[ERROR] can NOT put builtin env, k=USER, err=%v\n", err)
+			envs[EnvUser] = ""
+			log.Fatalf("[ERROR] put builtin env empty, k=%s, err=%v\n", EnvUser, err)
 		}
-
 	}
 
-	if _, ok := envs["HOST"]; !ok {
+	if _, ok := envs[EnvHost]; !ok {
 		ht, err := os.Hostname()
 		if err == nil {
-			envs["HOST"] = ht
-			log.Printf("[TRACE] put builtin env, k=HOST, v=%q\n", ht)
+			envs[EnvHost] = ht
+			log.Printf("[TRACE] put builtin env, k=%s, v=%q\n", EnvHost, ht)
 		} else {
-			envs["HOST"] = "localhost"
-			log.Fatalf("[ERROR] can NOT put builtin env, k=HOST, err=%v\n", err)
+			envs[EnvHost] = "localhost"
+			log.Fatalf("[ERROR] put builtin 'localhost', k=%s, err=%v\n", EnvHost, err)
 		}
-
 	}
 
-	if _, ok := envs["DATE"]; !ok {
+	if _, ok := envs[EnvDate]; !ok {
 		dt := time.Now().Format("2006-01-02 15:04:05") // :-P
-		envs["DATE"] = dt
-		log.Printf("[TRACE] put builtin env, k=DATE, v=%q\n", dt)
+		envs[EnvDate] = dt
+		log.Printf("[TRACE] put builtin env, k=%s, v=%q\n", EnvDate, dt)
+	}
+
+	if rl, ok := envs[EnvRule]; !ok {
+		envs[EnvRule] = EnvRuleError
+		log.Printf("[TRACE] put builtin env, k=%s, v=%q\n", EnvRule, EnvRuleError)
+	} else {
+		switch rl {
+		case EnvRuleEmpty, EnvRuleError:
+			log.Printf("[TRACE] use builtin env, k=%s, v=%q\n", EnvRule, rl)
+		default:
+			ExitIfTrue(true, -4, "unsupport env, key=%s, value=%s", EnvRule, rl)
+		}
 	}
 }
 

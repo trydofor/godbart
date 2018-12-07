@@ -1,4 +1,4 @@
-package internal
+package art
 
 import (
 	"github.com/pelletier/go-toml"

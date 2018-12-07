@@ -1,4 +1,4 @@
-package internal
+package art
 
 import (
 	"database/sql"
@@ -44,7 +44,7 @@ func Tree(pref *Preference, envs map[string]string, srce *DataSource, dest []*Da
 	}
 
 	for _, exe := range sqlx {
-		er := exe.Run(scon, dcon, risk)
+		er := RunSqlx(pref, exe, scon, dcon, risk)
 		if er != nil {
 			return er
 		}
@@ -53,7 +53,7 @@ func Tree(pref *Preference, envs map[string]string, srce *DataSource, dest []*Da
 	return nil
 }
 
-func (sqlx *SqlExe) Run(src *MyConn, dst []*MyConn, test bool) error {
+func RunSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, test bool) error {
 
 	ctx := make(map[string]interface{}) // 存放select的REF
 
@@ -61,37 +61,53 @@ func (sqlx *SqlExe) Run(src *MyConn, dst []*MyConn, test bool) error {
 		ctx[k] = v
 	}
 
+	ncm, lcm, dlt := "\n"+pref.LineComment+" ", pref.LineComment, pref.DelimiterRaw
+	var outf = func(str string, need, src bool) {
+		if !need {
+			return
+		}
+
+		if src {
+			fmt.Printf("%s%s SRC\n%s%s\n", ncm, lcm, str, dlt)
+		} else {
+			ddq := strings.Replace(str, "\n", ncm, -1)
+			fmt.Printf("%s%s OUT\n%s %s%s\n", ncm, lcm, lcm, ddq, dlt)
+		}
+	}
+
 	for _, exe := range sqlx.Exes {
-		er := runExe(exe, src, dst, ctx, test)
+		er := RunExe(exe, src, dst, ctx, outf, test)
 		if er != nil {
 			return er
 		}
 	}
+
 	return nil
 }
 
 var defValCol = regexp.MustCompile(`(VAL|COL)\[([^\[\]]*)\]`)
 
-func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, risk bool) error {
+func RunExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, outf func(str string, need, src bool), risk bool) error {
 
 	// 判断数据源和执行条件
-	if arg, igr := skipHasNotRun(src, exe.Runs, ctx); igr {
-		log.Printf("[TRACE] INGORE exe by RUN. arg=%#v seg=%#v\n", arg, exe.Seg)
-		return nil
-	}
-	if arg, igr := skipHasNotRun(src, exe.Outs, ctx); igr {
-		log.Printf("[TRACE] INGORE exe by OUT. arg=%#v seg=%#v\n", arg, exe.Seg)
+	if arg, igr := skipHasNotRun(src, exe.Acts, ctx); igr {
+		log.Printf("[TRACE] SKIP exe on Condition. arg=%#v seg=%#v\n", arg, exe.Seg)
 		return nil
 	}
 
 	// 构造执行语句
-	stmt, vals, err := buildStatement(exe, ctx, src)
+	stmt, prnt, vals, err := buildStatement(exe, ctx, src)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("[TRACE] plan stmt, line=%s, stmt=%s\n", exe.Seg.Line, stmt)
+	// \n-- 前缀
+	rsrc, rout := takeSrcOutAct(exe)
+	outf(prnt, rsrc, true)
+	outf(prnt, rout, false)
 
+	line := exe.Seg.Line
+	log.Printf("[TRACE] ready to run, line=%s, stmt=%#v\n", line, stmt)
 	if len(exe.Defs) > 0 { // 有结果集提取，不支持OUT
 		var ff = func(row *sql.Rows) error {
 			cols, er := row.ColumnTypes()
@@ -109,7 +125,7 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ri
 			cnt := 0
 			for row.Next() {
 				cnt++
-				log.Printf("[TRACE] processing %d rows, stmt=%s\n", cnt, stmt)
+				log.Printf("[TRACE] processing %d-th row, line=%s\n", cnt, line)
 				row.Scan(ptrs...)
 
 				//// 提取结果集
@@ -140,7 +156,7 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ri
 										cls[i] = c.Name()
 									}
 									ctx[pld] = cls
-									log.Printf("[TRACE]     simple sys DEF, hold=%s, para=%s, col-names=%s\n", pld, ptn, strings.Join(cls, ","))
+									log.Printf("[TRACE]     simple sys DEF, hold=%s, para=%s, values'count=%d\n", pld, ptn, len(cls))
 								} else {
 									dbt := make([]string, ln)
 									for i, c := range cols {
@@ -148,8 +164,7 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ri
 									}
 									ctx[pld] = vals
 									ctx[pld+":DatabaseTypeName"] = dbt
-									log.Printf("[TRACE]     simple sys DEF, hold=%s, para=%s, dbtypes=%s\n", pld, ptn, strings.Join(dbt, ","))
-
+									log.Printf("[TRACE]     simple sys DEF, hold=%s, para=%s, value'count=%d\n", pld, ptn, len(dbt))
 								}
 							}
 						}
@@ -160,7 +175,7 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ri
 							ctx[hld] = vals[i]
 							dbt := cols[i].DatabaseTypeName()
 							ctx[hld+":DatabaseTypeName"] = dbt
-							log.Printf("[TRACE]     simple usr DEF, hold=%s, para=%s, value=%#v, dbtype=%s\n", hld, ptn, vals[i], dbt)
+							log.Printf("[TRACE]     simple usr DEF, hold=%s, para=%s, dbtype=%s\n", hld, ptn, dbt)
 							lost = false
 							break
 						}
@@ -168,36 +183,37 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ri
 
 					if lost {
 						return errorAndLog("failed to resolve DEF. hold=%s, para=%s, in seg=%#v", hld, ptn, exe.Seg)
-					} else {
-
 					}
 				}
 
 				// 遍历FOR子树
 				for _, son := range exe.Sons {
-					if !shouldForRun(son) {
+					if !shouldForAct(son) {
 						continue
 					}
-					log.Printf("[TRACE] fork FOR child, line=%s, parent=%s\n", son.Seg.Line, exe.Seg.Line)
-					er := runExe(son, src, dst, ctx, risk)
+					log.Printf("[TRACE] fork FOR child, line=%s, parent=%s\n", son.Seg.Line, line)
+					er := RunExe(son, src, dst, ctx, outf, risk)
 					if er != nil {
 						return er
 					}
 				}
 			}
-			// 遍历END子树
-			for _, son := range exe.Sons {
-				if !shouldEndRun(son) {
-					continue
-				}
-				log.Printf("[TRACE] fork END child=%s, parent=%s\n", son.Seg.Line, exe.Seg.Line)
-				er := runExe(son, src, dst, ctx, risk)
-				if er != nil {
-					return er
+
+			// 有记录时，遍历END子树
+			if cnt > 0 {
+				for _, son := range exe.Sons {
+					if !shouldEndAct(son) {
+						continue
+					}
+					log.Printf("[TRACE] fork END child=%s, parent=%s\n", son.Seg.Line, line)
+					er := RunExe(son, src, dst, ctx, outf, risk)
+					if er != nil {
+						return er
+					}
 				}
 			}
 
-			log.Printf("[TRACE] processed %d rows, stmt=%s\n", cnt, stmt)
+			log.Printf("[TRACE] processed %d rows, line=%s, stmt=%#v\n", cnt, line, stmt)
 
 			return nil
 		}
@@ -207,7 +223,8 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ri
 			return er
 		}
 	} else {
-		rsrc, rout := takeSrcOutRun(exe)
+		rsrc, rout := takeSrcOutAct(exe)
+		dcnt := len(dst)
 
 		if risk {
 			if rsrc {
@@ -222,12 +239,12 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ri
 
 			if rout {
 				for i, db := range dst {
-					log.Printf("[TRACE] running on OUT[%d] db=%s\n", i, db.DbName())
+					log.Printf("[TRACE] running on OUT[%d/%d] db=%s\n", i+1, dcnt, db.DbName())
 					if a, e := db.Exec(stmt, vals...); e != nil {
-						log.Fatalf("[ERROR] failed on OUT[%d] db=%s, err=%v\n", i, db.DbName(), e)
+						log.Fatalf("[ERROR] failed on OUT[%d/%d] db=%s, err=%v\n", i+1, dcnt, db.DbName(), e)
 						return e
 					} else {
-						log.Printf("[TRACE] done %d affected on OUT[%d] db=%s\n", i, a, db.DbName())
+						log.Printf("[TRACE] done %d affected on OUT[%d/%d] db=%s\n", a, i+1, dcnt, db.DbName())
 					}
 				}
 			}
@@ -238,12 +255,12 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ri
 
 			if rout {
 				for i, db := range dst {
-					log.Printf("[TRACE] fake run on OUT[%d] db=%s\n", i, db.DbName())
+					log.Printf("[TRACE] fake run on OUT[%d/%d] db=%s\n", i+1, dcnt, db.DbName())
 				}
 			}
 		}
 	}
-	log.Printf("[TRACE] done stmt, line=%s\n\n", exe.Seg.Line)
+	log.Printf("[TRACE] accomplished stmt, line=%s\n\n", line)
 	return nil
 }
 
@@ -265,67 +282,60 @@ func skipHasNotRun(con *MyConn, args []*Arg, ctx map[string]interface{}) (*Arg, 
 	return nil, false
 }
 
-func takeSrcOutRun(exe *Exe) (bool, bool) {
-	// 没OUT时，默认在SRC上执行
-	// 有OUT时，必须有RUN才在SRC上执行
+func takeSrcOutAct(exe *Exe) (bool, bool) {
 
-	src, out := true, true
-	if len(exe.Outs) == 0 {
-		out = false
+	src, out := false, false
+	for _, v := range exe.Acts {
+		if v.Type == CmndOut {
+			out = true
+		} else if v.Type == CmndRun {
+			src = true
+		}
+	}
+
+	if out {
+		// 有OUT时，必须有RUN才在SRC上执行
 	} else {
-		src = len(exe.Runs) > 0
+		// 没OUT时，默认在SRC上执行
+		src = true
 	}
 
 	return src, out
 }
 
-func shouldForRun(exe *Exe) bool {
+func shouldForAct(exe *Exe) bool {
 	// 有END时，必须有FOR
 	// 默认是FOR
-	if shouldEndRun(exe) {
-		for _, arg := range exe.Runs {
+	if shouldEndAct(exe) {
+		for _, arg := range exe.Acts {
 			if arg.Para == ParaFor {
 				return true
 			}
 		}
-		for _, arg := range exe.Outs {
-			if arg.Para == ParaFor {
-				return true
-			}
-		}
-
 		return false
 	} else {
 		return true
 	}
 }
 
-func shouldEndRun(exe *Exe) bool {
-	for _, arg := range exe.Runs {
+func shouldEndAct(exe *Exe) bool {
+	for _, arg := range exe.Acts {
 		if arg.Para == ParaEnd {
 			return true
 		}
 	}
-	for _, arg := range exe.Outs {
-		if arg.Para == ParaEnd {
-			return true
-		}
-	}
+
 	return false
 }
 
 var nxl = []interface{}{}
 
-func buildStatement(exe *Exe, ctx map[string]interface{}, src *MyConn) (stmt string, vals []interface{}, err error) {
+func buildStatement(exe *Exe, ctx map[string]interface{}, src *MyConn) (stmt, prnt string, vals []interface{}, err error) {
 	stmt = exe.Seg.Text
-	if hlen := len(exe.Deps); hlen == 0 {
-		// 输出可执行的SQL
-		fmt.Printf("\n-- %s\n%s\n", src.DbName(), stmt)
-		if len(exe.Outs) > 0 { // 标记和注释，只有目标库SQL
-			fmt.Printf("\n%s\n", strings.Replace(stmt, "\n", "\n-- ", -1))
-		}
-	} else {
-		log.Printf("[TRACE] building statement=%s\n", stmt)
+	prnt = stmt
+
+	if hlen := len(exe.Deps); hlen > 0 {
+		log.Printf("[TRACE] building line=%s,stmt=%#v\n", exe.Seg.Line, stmt)
 		vals = make([]interface{}, 0, hlen)
 		var rtn, std strings.Builder // return,stdout
 		off := 0
@@ -394,7 +404,7 @@ func buildStatement(exe *Exe, ctx map[string]interface{}, src *MyConn) (stmt str
 
 				mts := defValCol.FindAllStringSubmatchIndex(ptn, -1)
 				if len(mts) == 0 {
-					err = errorAndLog("bad multiple hold. hold=%s, para=%s", hld, ptn)
+					err = errorAndLog("can not find hold, check the REF has record. hold=%s, para=%s", hld, ptn)
 					return
 				}
 
@@ -507,16 +517,7 @@ func buildStatement(exe *Exe, ctx map[string]interface{}, src *MyConn) (stmt str
 		}
 
 		stmt = rtn.String()
-		prnt := std.String()
-
-		rsrc, rout := takeSrcOutRun(exe)
-
-		if rsrc {
-			fmt.Printf("\n-- %s\n%s\n", src.DbName(), prnt)
-		}
-		if rout {
-			fmt.Printf("\n-- OUT\n-- %s\n", strings.Replace(prnt, "\n", "\n-- ", -1))
-		}
+		prnt = std.String()
 	}
 
 	return

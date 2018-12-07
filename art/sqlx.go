@@ -1,4 +1,4 @@
-package internal
+package art
 
 import (
 	"fmt"
@@ -36,8 +36,7 @@ type Exe struct {
 	// 产出
 	Defs map[string]string // REF|STR的提取，key=HOLD,val=PARA
 	// 行为
-	Runs []*Arg // 源库RUN
-	Outs []*Arg // 它库OUT
+	Acts []*Arg // 源库RUN & OUT
 
 	// 依赖，顺序重要
 	Deps []*Hld // 依赖
@@ -123,13 +122,19 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 		// 挂靠
 		if iarg >= 0 { //有注释的
 			defs := make(map[string]string)
+			rule := envs[EnvRule]
 			for j := iarg; j < i; j++ {
 				if arg, ok := lineArg[sqls[j].Line]; ok {
 					for _, gx := range arg {
 						switch gx.Type {
 						case CmndEnv:
 							if ev, kx := envs[gx.Para]; !kx {
-								return nil, errorAndLog("ENV not found. para=%s, line=%d, file=%s", gx.Para, gx.Head, seg.File)
+								if rule == EnvRuleError {
+									return nil, errorAndLog("ENV not found. para=%s, line=%d, file=%s", gx.Para, gx.Head, seg.File)
+								} else {
+									envx[gx.Hold] = ""
+									log.Printf("[TRACE]   checked def ENV, set Empty, Arg's line=%d, para=%s\n", gx.Head, gx.Para)
+								}
 							} else {
 								envx[gx.Hold] = ev
 								log.Printf("[TRACE]   checked def ENV, Arg's line=%d, para=%s, env=%s\n", gx.Head, gx.Para, ev)
@@ -163,7 +168,13 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 										envx[gx.Hold] = ev
 										log.Printf("[TRACE]   checked STR redef ENV, Arg's line=%d, para=%s, env=%s\n", gx.Head, rg.Para, ev)
 									} else {
-										return nil, errorAndLog("STR redefine ENV not found. para=%s, line=%d, file=%s", gx.Para, gx.Head, seg.File)
+										if rule == EnvRuleError {
+											return nil, errorAndLog("STR redefine ENV not found. para=%s, line=%d, file=%s", gx.Para, gx.Head, seg.File)
+										} else {
+											envx[rg.Para] = ""
+											log.Printf("[TRACE]   checked STR redefine ENV, set Empty, Arg's line=%d, para=%s\n", gx.Head, gx.Para)
+										}
+
 									}
 								} else { // REF
 									if ex, kx := holdExe[gx.Para]; kx {
@@ -177,12 +188,9 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 									}
 								}
 							}
-						case CmndRun:
-							exe.Runs = append(exe.Runs, gx)
-							log.Printf("[TRACE]   appended Exe's RUN, Arg's line=%d, hold=%s\n", gx.Head, gx.Hold)
-						case CmndOut:
-							exe.Outs = append(exe.Outs, gx)
-							log.Printf("[TRACE]   appended Exe's OUT, Arg's line=%d, hold=%s\n", gx.Head, gx.Hold)
+						case CmndRun, CmndOut:
+							exe.Acts = append(exe.Acts, gx)
+							log.Printf("[TRACE]   appended Exe's %s, Arg's line=%d, hold=%s\n", gx.Type, gx.Head, gx.Hold)
 						}
 					}
 				}
@@ -218,23 +226,17 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 
 		// 挂树
 		top := true
-		for _, v := range exe.Runs {
-			pa, ok := holdExe[v.Hold]
-			if ok {
+		for _, v := range exe.Acts {
+			if pa, ok := holdExe[v.Hold]; ok {
 				sonFunc(pa, exe, &top)
-				log.Printf("[TRACE] find RUN parent, hold=%s, parent=%s, child=%s\n", v.Hold, pa.Seg.Line, exe.Seg.Line)
-			} else {
-				return nil, errorAndLog("RUN HOLD's REF not found, hold=%s, line=%d, file=%s", v.Hold, v.Head, seg.File)
+				log.Printf("[TRACE] find %s parent, hold=%s, parent=%s, child=%s\n", v.Type, v.Hold, pa.Seg.Line, exe.Seg.Line)
+				continue
 			}
-		}
 
-		for _, v := range exe.Outs {
-			pa, ok := holdExe[v.Hold]
-			if ok {
-				sonFunc(pa, exe, &top)
-				log.Printf("[TRACE] find OUT parent, hold=%s, parent=%s, child=%s\n", v.Hold, pa.Seg.Line, exe.Seg.Line)
+			if v.Para == ParaHas || v.Para == ParaNot {
+				// not check
 			} else {
-				return nil, errorAndLog("OUT HOLD's REF not found, hold=%s, line=%d, file=%s", v.Hold, v.Head, seg.File)
+				return nil, errorAndLog("%s HOLD's REF not found, hold=%s, line=%d, file=%s", v.Type, v.Hold, v.Head, seg.File)
 			}
 		}
 
@@ -249,8 +251,12 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 		}
 
 		// 检查是否多库DEF
-		if len(exe.Defs) > 0 && len(exe.Outs) > 0 {
-			return nil, errorAndLog("OUT used on Defs(REF,STR), seg=%#v", exe.Seg)
+		if len(exe.Defs) > 0 {
+			for _, v := range exe.Acts {
+				if v.Type == CmndOut {
+					return nil, errorAndLog("OUT used on Defs(REF,STR), seg=%#v", exe.Seg)
+				}
+			}
 		}
 
 		if top {

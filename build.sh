@@ -1,15 +1,15 @@
 #!/bin/bash
 
 project="godbart"
-
 release=./release
+
+cd  $(dirname $0)
 rm -rf $release/
 mkdir -p $release
 
-cd  $(dirname $0)
+#gofmt -w ./
 
-gofmt -w ./
-
+# build
 for goos in "linux" "darwin" "freebsd" "windows"; do
     if [ "$goos" == "windows" ]; then
       obj_name=$project.exe
@@ -18,13 +18,11 @@ for goos in "linux" "darwin" "freebsd" "windows"; do
     fi
 
     GOOS=$goos GOARCH=amd64 go build
-    zip $release/$project-$goos-amd64.zip $obj_name
+    zip -m $release/$project-$goos-amd64.zip $obj_name
 #    GOOS=$goos GOARCH=386 go build
-#    zip $release/$project-$goos-386.zip $obj_name
-    rm -f $obj_name
+#    zip -m $release/$project-$goos-386.zip $obj_name
 done
 
+# md5sum
 cd $release
-for file in `ls`; do
-    md5sum $file >> md5sum.txt
-done
+md5sum * >> md5sum.txt

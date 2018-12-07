@@ -1,4 +1,4 @@
-package internal
+package art
 
 import (
 	"fmt"
@@ -103,7 +103,7 @@ func parseComment(segs *[]Sql, lines []string, name string, b *int, e int) {
 	*segs = append(*segs, Sql{
 		line, head, SegCmt, name, text,
 	})
-	log.Printf("[TRACE]   parsed Comment, line=%s\n", line)
+	log.Printf("[TRACE] %3d, parsed Comment, line=%s\n", len(*segs), line)
 	*b = -1
 }
 
@@ -112,9 +112,9 @@ func parseStatement(segs *[]Sql, lines []string, name string, b *int, e int, dt 
 		return
 	}
 
-	// 处理结束符
 	lns, lne := *b, e+1
 	dtl, dcl := len(*dt), len(dc)
+
 	typ := func(sql string) int {
 		if strings.EqualFold("SELECT", sql[0:6]) {
 			return SegRow
@@ -122,13 +122,11 @@ func parseStatement(segs *[]Sql, lines []string, name string, b *int, e int, dt 
 			return SegExe
 		}
 	}
-	//seg := func(s, e int, lines []string) Sql {
-	//
-	//}
+
 	for i := lns; i < lne; i++ {
-		l := len(lines[i])
+		lll := len(lines[i])
 		n := i + 1
-		if dcl > 0 && l > dcl && strings.EqualFold(dc, lines[i][0:dcl]) { // 变更结束符
+		if dcl > 0 && lll > dcl && strings.EqualFold(dc, lines[i][0:dcl]) { // 变更结束符
 			c := lines[i][dcl]
 			if c == ' ' || c == '\t' {
 				*dt = strings.TrimSpace(lines[i][dcl+1:])
@@ -143,7 +141,7 @@ func parseStatement(segs *[]Sql, lines []string, name string, b *int, e int, dt 
 						name,
 						strings.Join(lines[lns:i], Joiner),
 					})
-					log.Printf("[TRACE]   parsed Statement, line=%s\n", line)
+					log.Printf("[TRACE] %3d, parsed Statement, line=%s\n", len(*segs), line)
 				}
 				lns = n
 				// fmt.Printf("\t\tget new delimitor [%s] at line %d\n", *dt, n)
@@ -151,9 +149,9 @@ func parseStatement(segs *[]Sql, lines []string, name string, b *int, e int, dt 
 			}
 		}
 
-		dtp := l - dtl
-		if dtl > 0 && l > dtl && strings.EqualFold(*dt, lines[i][dtp:]) { // 结束符
-			lines[i] = lines[i][0:dtp]
+		dtp := lll - dtl
+		if dtl > 0 && lll > dtl && strings.EqualFold(*dt, lines[i][dtp:]) { // 结束符
+			lines[i] = lines[i][0:dtp] // 必须去掉结束符，要不重新定义结束符不识别
 			head := lns + 1
 			line := fmt.Sprintf("%d:%d", head, n)
 			*segs = append(*segs, Sql{
@@ -163,7 +161,7 @@ func parseStatement(segs *[]Sql, lines []string, name string, b *int, e int, dt 
 				name,
 				strings.Join(lines[lns:n], Joiner),
 			})
-			log.Printf("[TRACE]   parsed Statement, line=%s\n", line)
+			log.Printf("[TRACE] %3d, parsed Statement, line=%s\n", len(*segs), line)
 			lns = n
 			// fmt.Printf("\t\tget the delimitor at line %d\n", n)
 		}
@@ -179,7 +177,7 @@ func parseStatement(segs *[]Sql, lines []string, name string, b *int, e int, dt 
 			name,
 			strings.Join(lines[lns:lne], Joiner),
 		})
-		log.Printf("[TRACE]   parsed Statement, line=%s\n", line)
+		log.Printf("[TRACE] %3d, parsed Statement, line=%s\n", len(*segs), line)
 	}
 
 	*b = -1

@@ -1,8 +1,11 @@
 -- ENV "带空格的 时间" '2018-00-00 00:00:00'
+-- ENV DATE_FROM '2018-11-23 12:34:56'
+
 -- STR USER built_env_user # 直接定义
 -- STR HOST built_env_host # 直接定义
 -- STR DATE built_env_date # 直接定义
 -- REF Y4 '2018-00-01 00:00:00'
+-- RUN HAS '2018-00-00 00:00:00'
 SELECT YEAR(NOW()) as Y4, 'built_env_userbuilt_env_hostbuilt_env_date';
 
 -- STR '2018-00-01 00:00:00' $y4_table   #重新定义，以使SQL语法正确。非加引号规则
@@ -17,7 +20,7 @@ CREATE TABLE `tx_parcel_$y4_table` LIKE tx_parcel;
 -- STR "`COL[]` = VAL[]" "logno = -99009"  #直接定义，脱壳，加引号，模式展开。
 -- REF VAL[,\t] '多值占位值'
 -- STR `COL[]` $COLX
-SELECT * FROM tx_parcel WHERE create_time > '2018-00-00 00:00:00' LIMIT 2;
+SELECT * FROM tx_parcel WHERE create_time > '2018-11-23 12:34:56' LIMIT 2;
 
 -- OUT FOR 990001
 REPLACE INTO tx_parcel ($COLX) VALUES ('多值占位值');

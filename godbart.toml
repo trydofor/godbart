@@ -17,11 +17,10 @@ fmtdatetime='2006-01-02 15:04:05.000'
 connmaxopen = 10
 connmaxidel = 2
 
-
-
 [datasource]
 # 数据源名字和信息（和驱动有关）
-prd_main = 'trydofor:moilioncircle@tcp(127.0.0.1:3306)/prd_main'
-prd_2018 = 'trydofor:moilioncircle@tcp(127.0.0.1:3306)/prd_2018'
-dev_main = 'trydofor:moilioncircle@tcp(127.0.0.1:3306)/dev_main'
-lcl_main = 'trydofor:moilioncircle@tcp(127.0.0.1:3306)/lcl_main'
+prd_main = 'trydofor:moilioncircle@tcp(127.0.0.1:3306)/godbart_prd_main'
+prd_2018 = 'trydofor:moilioncircle@tcp(127.0.0.1:3306)/godbart_prd_2018'
+dev_main = 'trydofor:moilioncircle@tcp(127.0.0.1:3306)/godbart_dev_main'
+lcl_main = 'trydofor:moilioncircle@tcp(127.0.0.1:3306)/godbart_lcl_main'
+lcl_test = 'trydofor:moilioncircle@tcp(127.0.0.1:3306)/test'

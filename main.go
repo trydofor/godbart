@@ -1,7 +1,7 @@
 package main
 
 import (
-	my "github.com/trydofor/godbart/internal"
+	"github.com/trydofor/godbart/art"
 	"github.com/urfave/cli"
 	"io/ioutil"
 	"log"
@@ -11,27 +11,27 @@ import (
 	"time"
 )
 
-func checkConf(ctx *cli.Context) *my.Config {
+func checkConf(ctx *cli.Context) *art.Config {
 	file := ctx.String("c")
 	log.Printf("[TRACE] got conf=%s\n", file)
 
 	data, err := ioutil.ReadFile(file)
-	my.ExitIfError(err, -1, "can read config=%s", file)
+	art.ExitIfError(err, -1, "can read config=%s", file)
 
-	conf, err := my.ParseToml(string(data))
-	my.ExitIfError(err, -1, "can not parse TOML, config=%s", file)
+	conf, err := art.ParseToml(string(data))
+	art.ExitIfError(err, -1, "can not parse TOML, config=%s", file)
 
 	return conf
 }
 
-func checkDest(ctx *cli.Context, cnf *my.Config) []*my.DataSource {
+func checkDest(ctx *cli.Context, cnf *art.Config, req bool) []*art.DataSource {
 	flag := ctx.StringSlice("d")
-	my.ExitIfTrue(len(flag) == 0, -2, "no dest db selected")
+	art.ExitIfTrue(req && len(flag) == 0, -2, "no dest db selected")
 
-	dest := make([]*my.DataSource, len(flag))
+	dest := make([]*art.DataSource, len(flag))
 	for i := 0; i < len(flag); i++ {
 		d, ok := cnf.DataSource[flag[i]]
-		my.ExitIfTrue(!ok, -2, "db not found, dest=%s", flag[i])
+		art.ExitIfTrue(!ok, -2, "db not found, dest=%s", flag[i])
 		log.Printf("[TRACE] got dest db=%s\n", flag[i])
 		dest[i] = &d
 	}
@@ -39,26 +39,26 @@ func checkDest(ctx *cli.Context, cnf *my.Config) []*my.DataSource {
 	return dest
 }
 
-func checkSqls(ctx *cli.Context) (files []my.FileEntity) {
-	my.ExitIfTrue(ctx.NArg() == 0, -3, "must give a path or file for args")
-
-	flag := ctx.StringSlice("x")
-	files, err := my.FileWalker(ctx.Args(), flag)
-	my.ExitIfError(err, -3, "failed to read file")
-	my.ExitIfTrue(len(files) < 1, -3, "can not find any SQLs")
-
-	return
-}
-
-func checkSrce(ctx *cli.Context, cnf *my.Config) *my.DataSource {
+func checkSrce(ctx *cli.Context, cnf *art.Config, req bool) *art.DataSource {
 	flag := ctx.String("s")
-	my.ExitIfTrue(len(flag) == 0, -5, "no source db selected")
+	art.ExitIfTrue(req && len(flag) == 0, -5, "no source db selected")
 
 	ds, ok := cnf.DataSource[flag]
-	my.ExitIfTrue(!ok, -5, "db not found in config, source=%s", flag)
+	art.ExitIfTrue(!ok, -5, "db not found in config, source=%s", flag)
 	log.Printf("[TRACE] got source db=%s\n", flag)
 
 	return &ds
+}
+
+func checkSqls(ctx *cli.Context) (files []art.FileEntity) {
+	art.ExitIfTrue(ctx.NArg() == 0, -3, "must give a path or file for args")
+
+	flag := ctx.StringSlice("x")
+	files, err := art.FileWalker(ctx.Args(), flag)
+	art.ExitIfError(err, -3, "failed to read file")
+	art.ExitIfTrue(len(files) < 1, -3, "can not find any SQLs")
+
+	return
 }
 
 func checkEnvs(ctx *cli.Context) map[string]string {
@@ -72,27 +72,27 @@ func checkEnvs(ctx *cli.Context) map[string]string {
 			log.Printf("[TRACE] got input env, k=%q, v=%q\n", kv[0], kv[1])
 		} else {
 			ov := os.Getenv(kv[0])
-			my.ExitIfTrue(ov == "", -6, "bad env=%q", env)
+			art.ExitIfTrue(ov == "", -6, "bad env=%q", env)
 			log.Printf("[TRACE] got system env, k=%q, v=%q\n", kv[0], ov)
 		}
 	}
 
-	my.BuiltinEnvs(envs)
+	art.BuiltinEnvs(envs)
 
 	return envs
 }
 
 func checkKind(ctx *cli.Context) string {
 	flag := ctx.String("k")
-	kind, ok := my.TbName, false
-	for _, v := range my.DiffKinds {
+	kind, ok := art.TbName, false
+	for _, v := range art.DiffKinds {
 		if strings.EqualFold(flag, v) {
 			kind = v
 			ok = true
 			break
 		}
 	}
-	my.ExitIfTrue(!ok, -6, "unsupported (K)ind=%q", flag)
+	art.ExitIfTrue(!ok, -6, "unsupported (K)ind=%q", flag)
 	log.Printf("[TRACE] got kind=%s\n", flag)
 	return kind
 }
@@ -102,7 +102,7 @@ func checkRegx(ctx *cli.Context) []*regexp.Regexp {
 	regx := make([]*regexp.Regexp, 0, len(args))
 	for _, v := range args {
 		re, err := regexp.Compile(v)
-		my.ExitIfError(err, -6, "failed to compile Regexp=%v", v)
+		art.ExitIfError(err, -6, "failed to compile Regexp=%v", v)
 		log.Printf("[TRACE] got table regexp=%s\n", v)
 		regx = append(regx, re)
 	}
@@ -117,39 +117,39 @@ func checkRisk(ctx *cli.Context) bool {
 // command //
 func exec(ctx *cli.Context) (err error) {
 	conf := checkConf(ctx)
-	dest := checkDest(ctx, conf)
+	dest := checkDest(ctx, conf, true)
 	risk := checkRisk(ctx)
 	sqls := checkSqls(ctx)
-	return my.Exec(&conf.Preference, dest, sqls, risk)
+	return art.Exec(&conf.Preference, dest, sqls, risk)
 }
 
 func revi(ctx *cli.Context) (err error) {
 	conf := checkConf(ctx)
-	dest := checkDest(ctx, conf)
+	dest := checkDest(ctx, conf, true)
 	revi := ctx.String("r")
 	mask := ctx.String("m")
 	risk := checkRisk(ctx)
 	sqls := checkSqls(ctx)
-	return my.Revi(&conf.Preference, dest, sqls, revi, mask, risk)
+	return art.Revi(&conf.Preference, dest, sqls, revi, mask, risk)
 }
 
 func diff(ctx *cli.Context) error {
 	conf := checkConf(ctx)
-	dest := checkDest(ctx, conf)
-	srce := checkSrce(ctx, conf)
+	dest := checkDest(ctx, conf, false)
+	srce := checkSrce(ctx, conf, false)
 	kind := checkKind(ctx)
 	tbls := checkRegx(ctx)
-	return my.Diff(srce, dest, kind, tbls)
+	return art.Diff(srce, dest, kind, tbls)
 }
 
 func tree(ctx *cli.Context) error {
 	conf := checkConf(ctx)
 	conf.StartupEnv = checkEnvs(ctx)
-	srce := checkSrce(ctx, conf)
-	dest := checkDest(ctx, conf)
+	srce := checkSrce(ctx, conf, true)
+	dest := checkDest(ctx, conf, false)
 	risk := checkRisk(ctx)
 	sqls := checkSqls(ctx)
-	return my.Tree(&conf.Preference, conf.StartupEnv, srce, dest, sqls, risk)
+	return art.Tree(&conf.Preference, conf.StartupEnv, srce, dest, sqls, risk)
 }
 
 // cli //

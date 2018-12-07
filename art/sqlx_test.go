@@ -1,4 +1,4 @@
-package internal
+package art
 
 import (
 	"fmt"
@@ -19,16 +19,9 @@ func (x Exe) String() string {
 		sb.WriteString("]")
 	}
 
-	if len(x.Runs) > 0 {
-		sb.WriteString(" \nRuns:[")
-		for _, v := range x.Runs {
-			sb.WriteString(fmt.Sprintf("\n   %#v", *v))
-		}
-		sb.WriteString("]")
-	}
-	if len(x.Outs) > 0 {
-		sb.WriteString(" \nOuts:[")
-		for _, v := range x.Outs {
+	if len(x.Acts) > 0 {
+		sb.WriteString(" \nActs:[")
+		for _, v := range x.Acts {
 			sb.WriteString(fmt.Sprintf("\n   %#v", *v))
 		}
 		sb.WriteString("]")
