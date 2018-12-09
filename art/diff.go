@@ -22,7 +22,7 @@ type DiffItem struct {
 
 var DiffKinds = []string{TbName, Detail, Create}
 
-func Diff(srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regexp) error {
+func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regexp) error {
 
 	if kind == Create {
 		dbs := make([]*DataSource, 0, len(dest)+1)
@@ -38,7 +38,7 @@ func Diff(srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regex
 			if er != nil {
 				return er
 			}
-			showCreate(conn, rgx)
+			showCreate(pref, conn, rgx)
 		}
 		return nil
 	}
@@ -460,7 +460,7 @@ func makeTbname(conn *MyConn, rgx []*regexp.Regexp) (rst []string, set map[strin
 	return
 }
 
-func showCreate(conn *MyConn, rgx []*regexp.Regexp) {
+func showCreate(pref *Preference, conn *MyConn, rgx []*regexp.Regexp) {
 	tbs, err := listTable(conn, rgx)
 	if err != nil {
 		return
@@ -480,7 +480,7 @@ func showCreate(conn *MyConn, rgx []*regexp.Regexp) {
 		if e != nil {
 			log.Fatalf("[ERROR] db=%s, failed to dll table=%s\n", conn.DbName(), v)
 		} else {
-			fmt.Printf("\n-- db=%s, %d/%d, table=%s\n%s", conn.DbName(), i+1, c, v, tb)
+			fmt.Printf("\n%s db=%s, %d/%d, table=%s\n%s", pref.LineComment, conn.DbName(), i+1, c, v, tb)
 		}
 
 		tgs, e := conn.Triggers(v)
@@ -492,7 +492,7 @@ func showCreate(conn *MyConn, rgx []*regexp.Regexp) {
 				if r != nil {
 					log.Fatalf("[ERROR] db=%s, failed to ddl trigger=%s, table=%s\n", conn.DbName(), g.Name, v)
 				} else {
-					fmt.Printf("\n-- db=%s, trigger=%s, table=%s\n%s", conn.DbName(), g.Name, v, tg)
+					fmt.Printf("\n%s db=%s, trigger=%s, table=%s\n%s", pref.LineComment, conn.DbName(), g.Name, v, tg)
 				}
 			}
 		}

@@ -1,17 +1,17 @@
--- ENV DATE_FROM '2018-11-23 12:34:56'  #定义环境变量
--- STR '2018-11-23 12:34:56' $DATE_FROM #重定义，静态替换
+-- ENV DATE_FROM '1970-01-01 01:01:01'  #定义环境变量
+-- STR '1970-01-01 01:01:01' $DATE_FROM #重定义，静态替换
 
 -- REF id 9997770001001  #提取 id，作为9997770001001节点
 -- REF recver_id 9997770001002 # 999777前缀，0001第一个SELECT，002，第二个REF
 -- REF track_num '9997770001003' #提取 id，作为9997770001003节点
 -- REF `中文字段` '9997770001004' #假设存在，不存在且没引用不报错。
 -- STR VAL[] '$VAL*_9997770001005'
-SELECT * FROM tx_parcel WHERE create_time <= '2018-11-23 12:34:56';
+SELECT * FROM tx_parcel WHERE create_time <= '1970-01-01 01:01:01';
 
 -- OUT FOR 9997770001001
 REPLACE INTO tx_parcel VALUES ('$VAL*_9997770001005');
 
--- RUN END 9997770001001 # 需要使用 RUN FOR，否则会按顺序立即执行。
+-- RUN FOR 9997770001001 # 需要使用 RUN FOR，否则会按顺序立即执行。
 DELETE FROM tx_parcel where id = 9997770001001;
 
 
@@ -33,10 +33,10 @@ SELECT * FROM tx_parcel_event WHERE parcel_id = 9997770001001;
 
 -- OUT FOR 9997770003001
 INSERT INTO tx_parcel_event VALUES ('$VAL*_9997770003002')
-  ON DUPLICATE KEY UPDATE modify_time = '2018-11-23 12:34:56';
+  ON DUPLICATE KEY UPDATE modify_time = '1970-01-01 01:01:01';
 
 -- RUN END 9997770003001
-DELETE FROM tx_parcel_event where id = 9997770003001;
+DELETE FROM tx_parcel_event where parcel_id = 9997770003001;
 
 
 -- REF id 9997770004001
@@ -51,7 +51,7 @@ REPLACE INTO tx_receiver ($COLX_9997770004002) VALUES ('$VALX_9997770004002');
 DELETE FROM tx_receiver where id = 9997770004001;
 
 
--- RUN END 9997770001001 #每次完成节点9997770001001时执行
+-- RUN END 9997770003001
 REPLACE INTO sys_hot_separation(table_name, checked_id, checked_tm) VALUES ('tx_parcel_event', 9997770003001, now()); -- 单行注释
 
 -- RUN END 9997770002001
@@ -61,4 +61,4 @@ REPLACE INTO sys_hot_separation(table_name, checked_id, checked_tm) VALUES ('tx_
 REPLACE INTO sys_hot_separation(table_name, checked_id, checked_tm) VALUES ('tx_parcel', 9997770001001, now());
 
 -- RUN END 9997770001001 #存在9997770001001节点时执行，即9997770001001不为空
-DELETE FROM tx_parcel$log WHERE create_time <= '2018-11-23 12:34:56';
+DELETE FROM tx_parcel$log WHERE create_time <= '1970-01-01 01:01:01';

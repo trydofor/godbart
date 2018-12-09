@@ -116,7 +116,7 @@ func parseStatement(segs *[]Sql, lines []string, name string, b *int, e int, dt 
 	dtl, dcl := len(*dt), len(dc)
 
 	typ := func(sql string) int {
-		if strings.EqualFold("SELECT", sql[0:6]) {
+		if len(sql) > 6 && strings.EqualFold("SELECT", sql[0:6]) {
 			return SegRow
 		} else {
 			return SegExe
@@ -150,7 +150,7 @@ func parseStatement(segs *[]Sql, lines []string, name string, b *int, e int, dt 
 		}
 
 		dtp := lll - dtl
-		if dtl > 0 && lll > dtl && strings.EqualFold(*dt, lines[i][dtp:]) { // 结束符
+		if dtl > 0 && lll >= dtl && strings.EqualFold(*dt, lines[i][dtp:]) { // 结束符
 			lines[i] = lines[i][0:dtp] // 必须去掉结束符，要不重新定义结束符不识别
 			head := lns + 1
 			line := fmt.Sprintf("%d:%d", head, n)

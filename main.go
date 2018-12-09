@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/trydofor/godbart/art"
 	"github.com/urfave/cli"
 	"io/ioutil"
@@ -71,8 +72,8 @@ func checkEnvs(ctx *cli.Context) map[string]string {
 			envs[kv[0]] = kv[1]
 			log.Printf("[TRACE] got input env, k=%q, v=%q\n", kv[0], kv[1])
 		} else {
-			ov := os.Getenv(kv[0])
-			art.ExitIfTrue(ov == "", -6, "bad env=%q", env)
+			ov, ok := os.LookupEnv(kv[0])
+			art.ExitIfTrue(!ok, -6, "system ENV not found, env=%q", env)
 			log.Printf("[TRACE] got system env, k=%q, v=%q\n", kv[0], ov)
 		}
 	}
@@ -139,7 +140,7 @@ func diff(ctx *cli.Context) error {
 	srce := checkSrce(ctx, conf, false)
 	kind := checkKind(ctx)
 	tbls := checkRegx(ctx)
-	return art.Diff(srce, dest, kind, tbls)
+	return art.Diff(&conf.Preference, srce, dest, kind, tbls)
 }
 
 func tree(ctx *cli.Context) error {
@@ -150,6 +151,29 @@ func tree(ctx *cli.Context) error {
 	risk := checkRisk(ctx)
 	sqls := checkSqls(ctx)
 	return art.Tree(&conf.Preference, conf.StartupEnv, srce, dest, sqls, risk)
+}
+
+func sqlx(ctx *cli.Context) error {
+	conf := checkConf(ctx)
+	conf.StartupEnv = checkEnvs(ctx)
+	sqls := checkSqls(ctx)
+	sqlx, err := art.ParseTree(&conf.Preference, conf.StartupEnv, sqls)
+	if err != nil {
+		return err
+	}
+
+	for i, t := range sqlx {
+		fmt.Printf("\n==== envx file=%s ====", sqls[i].Path)
+		for k, v := range t.Envs {
+			fmt.Printf("\n%s=%s", k, v)
+		}
+
+		fmt.Printf("\n==== exex file=%s ====", sqls[i].Path)
+		for _, x := range t.Exes {
+			fmt.Printf("\n%v", x)
+		}
+	}
+	return nil
 }
 
 // cli //
@@ -272,6 +296,16 @@ func main() {
 				riskFlag,
 			},
 			Action: tree,
+		},
+		{
+			Name:      "sqlx",
+			Usage:     "static analyze data-tree by sql file",
+			ArgsUsage: "some files or paths of SQLs",
+			Flags: []cli.Flag{
+				confFlag,
+				envsFlag,
+			},
+			Action: sqlx,
 		},
 	}
 

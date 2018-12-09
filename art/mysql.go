@@ -188,7 +188,7 @@ func (m *MyConn) DdlTable(table string) (string, error) {
 				return
 			}
 		}
-		ddl = fmt.Sprintf("DROP TABLE IF EXISTS `%s`;\n%s\n", table, dl)
+		ddl = fmt.Sprintf("DROP TABLE IF EXISTS `%s`%s\n%s%s\n", table, m.Pref.DelimiterRaw, dl, m.Pref.DelimiterRaw)
 		return
 	}
 
@@ -219,7 +219,7 @@ func (m *MyConn) DdlTrigger(trigger string) (string, error) {
 		} else {
 			dl = col[2]
 		}
-		ddl = fmt.Sprintf("DROP TRIGGER IF EXISTS `%s`;\nDELIMITER $$\n%s $$\nDELIMITER ;\n", trigger, dl)
+		ddl = fmt.Sprintf("DROP TRIGGER IF EXISTS `%s` %s\n%s $$\n%s $$\n%s %s\n", trigger, m.Pref.DelimiterRaw, m.Pref.DelimiterCmd, dl, m.Pref.DelimiterCmd, m.Pref.DelimiterRaw)
 		return
 	}
 

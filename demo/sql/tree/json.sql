@@ -1,0 +1,34 @@
+-- ENV DATE_FROM '2018-11-23 12:34:56'
+
+-- 生成 TSV
+-- STR COL[\t] $TSV_HEAD
+-- STR VAL[\t] $TSV_DATA
+
+SELECT * FROM tx_parcel WHERE create_time > '2018-11-23 12:34:56' LIMIT 2;
+
+-- OUT ONE $TSV_HEAD
+$TSV_HEAD ;
+-- OUT FOR $TSV_HEAD
+$TSV_DATA ;
+
+-- 生成CSV
+-- STR "COL[]" $CSV_HEAD
+-- STR "VAL[]" $CSV_DATA
+SELECT * FROM tx_parcel WHERE create_time > '2018-11-23 12:34:56' LIMIT 3;
+
+-- OUT ONE $CSV_HEAD
+$CSV_HEAD ;
+-- OUT FOR $CSV_DATA
+$CSV_DATA ;
+
+
+-- 生成JSON，此时有 脱引号，模式的组合
+-- STR `"COL[,\n]" = VAL[]` `$JSON_FIELD`
+
+-- REF ID 990003
+SELECT * FROM tx_parcel WHERE create_time > '2018-11-23 12:34:56' LIMIT 4;
+
+-- OUT FOR 990003
+{
+$JSON_FIELD
+} ;

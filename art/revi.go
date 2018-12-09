@@ -125,18 +125,29 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi string, 
 	}
 
 	// run
+	// 打开链接
 	wg := &sync.WaitGroup{}
-	for _, v := range dest {
-		conn, er := openDbAndLog(v)
+	cnln := len(dest)
+	conn := make([]*MyConn, cnln)
+	for i, v := range dest {
+		con, er := openDbAndLog(v)
 		if er != nil {
-			continue
+			return errorAndLog("failed to open db=%s, err=%#v", v.Code, er)
 		}
-
+		conn[i] = con
 		wg.Add(1)
+	}
+
+	// 多库并发，单库有序
+	for i := 0; i < cnln; i++ {
 		if risk {
-			go goRevi(wg, pref, reviSegs, conn, reviSlt, mreg, risk)
+			con := conn[i]
+			go func() {
+				defer wg.Done()
+				ReviEach(pref, reviSegs, con, reviSlt, mreg, risk)
+			}()
 		} else {
-			goRevi(wg, pref, reviSegs, conn, reviSlt, mreg, risk)
+			ReviEach(pref, reviSegs, conn[i], reviSlt, mreg, risk)
 		}
 	}
 
@@ -153,8 +164,7 @@ func findUpdRevi(updSeg string, updRevi string, mask *regexp.Regexp) (revi strin
 	return mask.FindString(updSeg)
 }
 
-func goRevi(wg *sync.WaitGroup, pref *Preference, revs []ReviSeg, conn Conn, slt string, mask *regexp.Regexp, risk bool) {
-	defer wg.Done()
+func ReviEach(pref *Preference, revs []ReviSeg, conn Conn, slt string, mask *regexp.Regexp, risk bool) {
 
 	var revi string
 	var slv = func(rs *sql.Rows) (err error) {
@@ -209,17 +219,20 @@ func goRevi(wg *sync.WaitGroup, pref *Preference, revs []ReviSeg, conn Conn, slt
 	cmn, dlt := pref.LineComment, pref.DelimiterRaw
 	for _, s := range revs {
 
-		if len(revi) > 0 && strings.Compare(s.revi, revi) <= 0 {
-			for _, v := range s.segs {
-				if v.Type != SegCmt {
-					cnt--
-				}
+		pcnt := 0
+		for _, v := range s.segs {
+			if v.Type != SegCmt {
+				pcnt++
 			}
-			log.Printf("[TRACE] ===Run=== ignore smaller. db=%s, revi=%s, db-revi=%s\n", conn.DbName(), s.revi, revi)
+		}
+
+		if len(revi) > 0 && strings.Compare(s.revi, revi) <= 0 {
+			log.Printf("[TRACE] ignore smaller. db=%s, revi=%s, db-revi=%s, sqls=[%d,%d]/%d\n", conn.DbName(), s.revi, revi, cur+1, cur+pcnt, cnt)
+			cur = cur + pcnt
 			continue
 		}
 
-		log.Printf("[TRACE] ===Run=== db=%s, revi=%s, sqls=%d\n", conn.DbName(), s.revi, len(s.segs))
+		log.Printf("[TRACE] db=%s, revi=%s, sqls=%d\n", conn.DbName(), s.revi, pcnt)
 		for _, v := range s.segs {
 			if v.Type == SegCmt {
 				continue
@@ -243,5 +256,11 @@ func goRevi(wg *sync.WaitGroup, pref *Preference, revs []ReviSeg, conn Conn, slt
 				log.Printf("[TRACE] db=%s, %d/%d, %d affects. revi=%s, file=%s, line=%s\n", conn.DbName(), cur, cnt, a, s.revi, v.File, v.Line)
 			}
 		}
+	}
+
+	if cur != cnt {
+		log.Printf("[TRACE] db=%s, %d/%d, partly done\n\n", conn.DbName(), cur, cnt)
+	} else {
+		log.Printf("[TRACE] db=%s, sqls=%d, all done\n\n", conn.DbName(), cnt)
 	}
 }

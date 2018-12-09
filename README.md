@@ -4,16 +4,33 @@
 ```
   |^^^^^^|    /god-bark/ 是一个go写的
   |      |    基于SQL的数据库运维命令行
-  | (o)(o)    □ 数据库和数据的版本管理
-  @      _)   □ 比较表，索引，触发器
-   | ,___|    □ 以业务`数据树`迁移数据
+  | (o)(o)    □ 多库执行，版本管理
+  @      _)   □ 比较表、索引、触发器差异
+   | ,___|    □ 以业务`数据树`提取数据
    |   /      □ 纯SQL写`数据树`的配置
 ```
 
-使用场景的前置要求
+使用场景的前置要求，
 
- * 数据库主键具有分布式特征。
- * 每组SQL间，要有空行分割。
+ * DBA维护多库，一个SQL在多库上执行。
+ * 生成某库某表的创建SQL（表，所以，触发器）。
+ * 对比不同库间表结构差异（表，列，索引，触发器）。
+ * 多库的版本管理，更新到指定版本。
+ * 导出数据，保持CSV/TSV文件。
+ * 迁移`数据树`，主键有分布式特征，无自增型。
+ * 当前只适配了MySql，可自行实现PG版。
+ * SQL语句，必须有结束符，如`;`，否则认为是一组。
+
+`数据数(DataTree)` 指因为业务逻辑（非强外键关系）形成的数据依赖关系。
+比如`demo/init/2.data.sql`中的关系，存在以下多个`1:N`关系。
+```
+|-(TOP)-收件人(tx_receiver)
+|      |-(1:N)-包裹(tx_parcel)
+|      |      |-(1:N)-物流(tx_track)
+|      |      |-(1:N)-事件(tx_parcel_event)
+|      |      |-(1:N)-历史(tx_parcel$log)
+```
+可以形成以`收件人`为根的树，也可以从`包裹`为根，形成数据树。
 
 开发和测试环境，ubuntu 16.04 
 
@@ -22,18 +39,19 @@
 
 ## 1.执行脚本 Exec
 
-在不同的db上，批量执行脚本。脚本中支持环境变量，结果集引用，条件执行等。
+在不同的db上，纯粹的批量执行脚本。
 
 ```bash
 # 执行 demo/sql/init/的`*.sql`和`*.xsql`
 ./godbart exec \
  -c godbart.toml \
- -d prd_main -d prd_2018 \
+ -d prd_main \
+ -d prd_2018 \
  -x .sql -x .xsql \
  demo/sql/init/
 ```
 
-其中，`exec` 命令，会把输入的文件或路径以SQL执行。
+其中，`exec` 命令，会把输入的文件或路径，分成SQL组，执行。
 
  * `-c` 必填，配置文件位置。
  * `-d` 必填，目标数据库，可以指定多个。
@@ -42,8 +60,8 @@
 
 ## 2.版本管理 Revi
 
-每次`schema`或数据的更新，都需要有版本管理。通常，使用一个sequence表，记录版本号。
-并且我们只考虑升级不考虑降级。如果出现需要降级的情况时，建议以负相补丁形式进行升级。
+数据库需要有版本管理时。通常，使用一个表，记录版本号，以识别和对比。
+`Revi`只考虑Up不考虑Down。如果需要Down时，以`负向补丁`形式进行Up。
 
 ```bash
 # 执行 demo/sql/revi/*.sql，具体SQL写法参考此目录的文件
@@ -56,7 +74,7 @@
  demo/sql/revi/
 ```
 
-其中，`revi` 命令，会把输入的文件或路径的SQL进行版本切分。
+其中，`revi` 命令，会把输入的文件或路径的SQL进行按版本号分组。
 
  * `-c` 必填，配置文件位置。
  * `-d` 必填，目标数据库，可以指定多个。
@@ -66,15 +84,15 @@
  * `--agree` 选填，风险自负，真正执行。
 
 `版本号`要求，
- * 必须唯一且递增
- * 可以当做字符串比较大小，如日期+序号：`yyyymmdd###`。
- * 具有相同的格式，可以用正则匹配
+ * 全局必须唯一且递增，但不要求连续。
+ * 能以字符串方式比较大小，如日期+序号：`yyyymmdd###`。
+ * 具有可以用正则匹配提取的固定格式。
 
 
-版本管理的SQL书写有特别的格式，每个版本块，必须被`版本查询`和`版本更新`的SQL包围。
-因此，SQL文件中，首个单值SELECT和最尾的Execute，视为版本查询和更新的SQL。
+版本管理的SQL有特别的要求，必须被`版本查询`和`版本更新`的SQL包围。
+因此，SQL文件中，首个SELECT和最尾的Execute，视为版本查询和更新的SQL。
 
-作为参数传入的版本文件，需要增序，与内置的版本顺序一致。
+作为参数传入的版本文件，版本号需要递增，否则报错（只检查，不排序）。
 
 ```mysql
 -- 创建version表 # 此时没有版本查询，但在之前，因此会被执行
@@ -98,9 +116,12 @@ REPLACE INTO sys_schema_version (version, created) VALUES( 2018022801, NOW());
 
 ## 3.结构对比 Diff
 
-对一个或多个数据库的表结构，能够生成表字段加索引，trigger的创建DDL。
+对一个或多个数据库的结构差异，能够生成创建SQL(DDL)，支持table&index，trigger。
 
-过程信息使用log输出stderr(`2`)。结果信息使用stdout(`1`)输出。因此可以分离信息。
+过程信息使用log输出stderr(`2`)。结果信息使用stdout(`1`)输出。
+结果信息中，用`>`表示只有左侧存在，`<`表示只有右侧存在。
+
+通过`SHELL`特性，可以有以下的信息分离方式。
 
  * `> main-2018-diff-out.log` 结果直接保存文件，控制台不输出。
  * `2> main-2018-diff-err.log` 过程保存文件，控制台不输出。
@@ -110,14 +131,14 @@ REPLACE INTO sys_schema_version (version, created) VALUES( 2018022801, NOW());
  * `2>&1| tee main-2018-diff-all.log` 全部保存文件，且控制台输出。
 
 ```bash
-# 对表名，字段，索引，触发器都进行比较，并保存结果到 main-2018-diff.log
+# 对表名，字段，索引，触发器都进行比较，并保存结果到 main-2018-diff-out.log
 ./godbart diff \
  -c godbart.toml \
  -s prd_main \
  -d prd_2018 \
  -k detail \
  'tx_.*' \
-> main-2018-diff-out.log
+| tee main-2018-diff-out.log
 ```
 
  * `-s` 为左侧比较相，可以零或一。
@@ -131,32 +152,29 @@ REPLACE INTO sys_schema_version (version, created) VALUES( 2018022801, NOW());
 参数为需要对比的表的名字的正则表达式。如果参数为空，表示所有表。
 `-s`和`-d`，必须指定一个。只有一个时，仅打印该库，多个时才进行比较。
 
-`表明细Detail`的内容格式中，用`>`表示只有左侧存在，`<`表示只有右侧存在。
-
-
 ## 4.数据迁移 Tree
 
-不建议一次转移大量数据，可能引起网络超时或内存不够存放临时数据。
+不建议一次转移大量数据，有概率碰到网络超时或内存紧张。
 
 ```bash
-# 对表名，字段，索引，触发器都进行比较，并保存结果到 main-2018-diff.log
+# 对表名，字段，索引，触发器都进行比较，并保存结果到 main-tree-out.log
 ./godbart tree \
  -c godbart.toml \
  -s prd_main \
  -d prd_2018 \
  -x .sql -x .xsql \
- -e "DATE_FROM=2018-11-23 12:34:56"
+ -e "DATE_FROM=2018-11-23 12:34:56" \
  demo/sql/tree/tree.sql
  > main-tree-out.log
 ```
 
-数据活性，不同业务场景有不同的定义，比如按日期，按ID范围，甚至ID取余。
-本功能只支持静态分库，即对既有数据，在执行前已预知数据范围和目标数据库。
+不同业务场景对`数据活性`有不同的定义，比如日期，按ID范围等。
+`Tree`命令只支持静态分离数据，即在执行前已预知数据范围和目标数据库。
 因为动态分库，通常有业务代码负责，而不会沦落到"SQL+数据维护"的层面。
-此外，要求表的主键具有分布式主键特质（不支持单表自增型，破坏数据关系）
+此外，要求表的主键具有分布式主键特质（当前不支持单表自增型，破坏数据关系）
 
 数据树(DataTree)的核心是`占位`。唯一的占位符，可以准确描述数据关系，
-自定义占位，可以满足基本的SQL语法。占位必须先声明再使用，以区别普通文字。
+可以满足基本的SQL语法。占位必须先声明再使用，以区别普通字面量。
 
 ```mysql
 -- 建立分库有关的表
@@ -168,8 +186,8 @@ CREATE TABLE `sys_hot_separation` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 ```
 
-设置分库时，数据迁移规则必须预先可知，如下脚本根据上次迁移ID，迁移10棵以tx_parcel为根的`数据树`。
-并每迁移一棵树，就会执行一次`END`，已完成此树的标记和清理工作。
+分离数据的规则必须预先可知，如下脚本根据上次迁移ID，迁移10棵以tx_parcel为根的`数据树`。
+并每迁移一棵树，就会执行一次`FOR`，已完成此树的标记和清理工作。
 ```mysql
 -- REF checked_id 990001  #数据树根节点
 SELECT checked_id FROM sys_hot_separation WHERE table_name = 'tx_parcel';
@@ -186,43 +204,44 @@ SELECT * FROM tx_parcel_event WHERE parcel_id = 990002;
 
 -- RUN FOR 990002 #每棵990002树节点完成时，执行此语句
 REPLACE INTO sys_hot_separation(table_name, checked_id, checked_tm) VALUES 
- ('tx_parcel_event', 990004, now())
-,('tx_track', 990003, now())
-,('tx_parcel', 990002, now());
+('tx_parcel', 990002, now());
 ```
 
 ## 5.指令变量
 
-`数据数data-tree`配置，使用SQL的单行注释定义`变量para`和`占位hold`，然后在执行时进行替换。
-这样的好处能够保留SQL的可读性和执行能力，每个SQL段直接要留有空行，否则会作为一组SQL同时执行。
-`数据树`按SQL从上至下关系提取，并以此顺序导入其他数据库，所以如有外键约束，需要注意插入顺序。
+`指令`由SQL的单行注释定义，由`变量para`和`占位hold`构成。
+保留SQL的可读性和执行能力，对DBA友好，在运行时进行静态或动态替换。
 
- * `指令` 固定值，不区分大小写，当前只支持，`ENV` `REF` `STR` `RUN` `OUT`
+`数据树`按SQL从上至下的顺序构建和执行，因此，`变量`和`占位`必须先声明再使用，否则无法正确识别占位符。
+
+ * `指令`是固定值，当前只支持，`ENV` `REF` `STR` `RUN` `OUT`
+    - `ENV` `REF` `STR` 为定义指令。
+    - `RUN` `OUT` 为使用指令。
+    - `ENV` `REF` 对`变量`自动脱去最外层成对的引号。
+    - `STR` 有自己的脱引号规则，以进行`模式展开`。
  * `引号`包括，单引号`'`，双引号`"`，反单引号`` ` ``。
  * `空白`指英文空格`0x20`和制表符`\t`
  * `变量`和`占位`要求相同，都区分大小写。
-    - ```[^ \t'"`]+``` 连续非引号空白
-    - ```(['"`])[^\1]+\1```成对引号括起来的字符串(非贪婪)
-    - 使用时，最外层的成对引号会被去掉（`STR`特殊）。
- * `占位`，在SQL语句中的占位符。
-    - 定义`占位` 必须当前SQL中全局唯一，不与其他字符串混淆，以准确替换，确定数据关系。
-    - `ENV` `REF` `STR` 为定义指令，`RUN` `OUT` 为使用指令。
-    - 尽量使用SQL中合法数据格式，没必要自找麻烦，比如没必要的引号，特殊字符等。
+    - ```[^ \t'"`]+``` 连续的不包括引号和空白的字符串。
+    - ```(['"`])[^\1]+\1```成对引号括起来的字符串(非贪婪)。
+ * `占位`，在SQL语句符合语法的字面量（数字，字符串，语句等）。
+    - 必须当前SQL中全局唯一，不与其他字面量混淆，以准确替换，确定数据关系。
+    - 尽量使用SQL的合规语法，没必要自找麻烦，比如没必要的引号或特殊字符。
     - 使用时，保留所有引号。
-    
- 变量必须先声明再使用，否则无法正确识别占位符。
+    - 选择`占位`，尽量构造出where条件为false的无公害SQL。
 
 ### 5.1.环境变量 ENV
 
-`ENV` 全局有效，通过 `-e MY_ENV="my val"`传入，只有Key表示使用系统变量，如 `-e PATH`。
-内置以下变量，可以通过命令行覆盖。
+`ENV`通过 `-e MY_ENV="my val"`传入，全局有效。
+当只有Key表示使用系统变量，如 `-e PATH`，系统内置了以下变量
+ 
  - `USER`，当前用户
  - `HOST`，主机名
  - `DATE`，当前日时(yyyy-mm-dd HH:MM:ss)
- - `ENV-CHECK-RULE`，不存在时，如何处理，默认是`ERROR`：报错；`EMPTY`：置空；
+ - `ENV-CHECK-RULE`，ENV检查规则，默认`ERROR`：报错；`EMPTY`：置空；
 
 如下SQL，定义环境变量`DATE_FROM`，其占位符`'2018-11-23 12:34:56'` ，
-需要通过系统环境变量获得，如果不存在则会报错。
+需要通过系统环境变量获得，如果不存在（默认ERROR）则会报错。
 
 假设运行时 `DATE_FROM`的值为`'2018-01-01 00:00:00'`，那么上述SQL执行时为，
 是采用PreparedStatement的动态形式，以防止SQL转义或注入。
@@ -232,24 +251,22 @@ REPLACE INTO sys_hot_separation(table_name, checked_id, checked_tm) VALUES
 SELECT * FROM tx_parcel WHERE create_time = '2018-11-23 12:34:56';
 
 -- 运行时替换，比如实际参数为'2018-01-01 00:00:00'
-SELECT * FROM tx_parcel WHERE create_time = ?
+-- SELECT * FROM tx_parcel WHERE create_time = ?
 ```
 
 ### 5.2.结果引用 REF
 
-`REF` 也是PreparedStatement形式替换，只对所在结果集的每天记录产生循环。
-多个`REF`会产生多个分叉点，进而形成不同的子树。
+`REF` 也采用PreparedStatement替换，并对所在结果集的每条记录循环。
+多个`REF`会产生多个分叉点，进而形成不同的子数据树。
 
 当子语句，只依赖一个`REF`的`占位`(如9900397)时，相当于`RUN FOR 9900397`，
 因为时唯一关系，所以可以省略`RUN/OUT`，两者时等价的。
 
 当子语句，会依赖多个`REF`的`占位`(如9900398,9900399)时，为了避免歧义，
-必须使用 `RUN/OUT`精确描述。
+必须使用 `RUN/OUT`精确描述，否则系统会任性选择。
 
 如下SQL，定义了结果集的引用 `id`和`track_num`变量，和他们对应的SQL占位符。
 其中，`id`和`track_num`，都是`tx_parcel`的结果集中，用来描述数据树。
-
-`变量`可以被引号包围，以用来更好的使用空白或中文字段等情况（见，脱引号处理）。
 
 ```mysql
 -- ENV DATE_FROM '2018-11-23 12:34:56'
@@ -262,50 +279,48 @@ SELECT * FROM tx_track WHERE track_num = 'TRK1234567890';
 SELECT * FROM tx_parcel_event WHERE parcel_id = 1234567890;
 ```
 
-较为特殊的是，系统为`SELECT *` 内定了结果集引用，以便可以构建insert和update语句。
+系统为`SELECT *` 内定了结果集引用，以便可以构建insert和update语句。
 
  * `COL[]` 表示所有列名，会展开为 `id`,`name`,等（可以转义）
  * `VAL[]` 表示结果的值，会展开为 `?`占位符和对应值。
  * `COL[1]` 表示获得第1个列名
  * `VAL[2]` 表示获得第2个值
  
- 其中，角标从1开始。引用为数组时，`[]`内要制定分隔符，默认时`,`。
- 即，`COL[]`和`COL[,]`相同。存在多个分隔符时，只取第一个非空的。
- 分隔符，不能用数字，因为做角标；不能用`[]`，因为你懂的。
+ 其中，角标从1开始。引用为数组时，`[]`内指定分隔符，默认是`,`。
+ 
+ * `COL[]`和`COL[,]`相同。
+ * 存在多个分隔符时，只取第一个非空的。
+ * 不能用数字，因为做角标
+ * 不能用`[`或`]`，因为你懂的。
+ * 仅支持`\\`，`\t`，`\n`的字符转义。
 
 ### 5.3.静态替换 STR
 
 `STR`与`ENV`和`REF`不同，采用的是静态替换字符串。可以对结果集或占位符使用。
-`STR` 可以用 `ENV`和`REF` 的`变量`，也以用`占位`重新定义。
+`STR`可以直接定义（同`REF`和`ENV`），也以对其他`占位`重新定义。
 
 `脱引号`处理，当`变量`和`占位`具有相同的引号规则，则同时脱去最外的一层引号。
-此规则只对`STR`有效，因为其变量部分，可以重定义其他有引号的`占位`。
+此规则只对`STR`有效，因为其变量部分，可以重定义带有引号的`占位`。
 
-`加引号`处理，如果`脱引号`后，`变量`仍有引号包围，那么替换时会增加包围的引号。
-因为此规则的存在，当`变量`必须带引号时，需要先`REF`在`STR`才能正确的处理。
-
-`模式展开`，`变量`中有多个多值内容`COL[*]`或`VAL[*]`时，可以展开。
-`模式展开`限制比较多，因为不想简单的事情搞复杂了。
+`模式展开`，`变量`中有`COL[*]`或`VAL[*]`时，会进行展开。
 
  - 首先脱引号处理。
  - 只支持直接定义，不支持重新定义。
- - 除了`COL[*]`和`VAL[*]`外，都作为静态字符串处理，不会深度展开。
- - 只支持`\t`,`\n`，`\\`转移。
+ - 除了`COL[*]`和`VAL[*]`外，都作为字面量处理，不会深度展开。
  - `COL[*]`部分，使用静态替换。
- - `VAL[*]`部分，仍然使用PreparedStatement形式执行。
- 
+ - `VAL[*]`部分，使用PreparedStatement形式执行。
 
 ```mysql
 -- REF Y4 '2018-00-00 00:00:00'
 SELECT year(now()) as Y4;
 
--- STR '2018-00-00 00:00:00' $y4_table   #重新定义，以使SQL语法正确。非加引号规则
+-- STR '2018-00-00 00:00:00' $y4_table   #重新定义，以使SQL语法正确。
 CREATE TABLE tx_parcel_$y4_table LIKE tx_parcel;
 -- 替换后
 CREATE TABLE tx_parcel_2018 LIKE tx_parcel;
 
 -- STR COL[1] $COL1  #直接定义。
--- STR "`COL[]` = VAL[]" "logno = -99009"  #直接定义，脱引号，加引号，模式展开。
+-- STR "`COL[]` = VAL[]" "logno = -99009"  #直接定义，脱引号，模式展开。
 -- REF VAL[1] '占位值'
 -- REF id 990001
 SELECT * FROM tx_parcel WHERE create_time = '2018-11-23 12:34:56';
@@ -321,29 +336,35 @@ UPDATE tx_parcel SET `id` = ? ,`create_time` = ? /*循环加下去，逗号分�
 
 ### 5.4.条件执行 RUN
 
-执行条件由`REF`或`ENV`定义，只对后续的第一条语句有效。目前支持的条件和含义如下，
+执行条件由`REF`或`ENV`定义，只对所在的语句有效。
 
- * `FOR` 表示`REF`所在节点为根，每棵树结束时执行。等效于Hold依赖关系
- * `END` 表示`REF`所在节点为根，所有树结束时执行。
- * `HAS` 表示`占位`变量有值时执行。有值指，数值大于0，布尔true，非NULL，其他转为字符串后非空。
+ * `FOR` 以定义`占位`的节点为根，每棵树结束时执行。等效于Hold依赖关系。
+ * `ONE` 以定义`占位`的节点为根，第一棵树时执行。
+ * `END` 以定义`占位`的节点为根，最后一棵树时执行。
+ * `HAS` 表示`占位`变量有值时执行。`有值`指，
+    - 数值大于`0`
+    - 布尔`true`
+    - 非`NULL`
+    - 字符串非空（`“”`）
+    - 其他类型强转为字符串后非空。
  * `NOT` 与`HAS`相反。
 
-多个`FOR`和`END`时，是`OR`关系。`HAS`/`NOT`与其他是`AND`处理。
+条件执行，有以下约定关系，
 
-与`REF`的`HOLD`确定单父关系不同，`RUN`可以确定多父关系。并且，当有`RUN`确立父级关系时忽略`REF`的。
+ * 多个`ONE|FOR|END`是`OR`关系。
+ * `HAS|NOT`自身或与其他是`AND`关系。
+ * `RUN` 可以确定多个父关系，且强于`REF`。
+ * `RUN` 在树结束时执行，而`REF`在树中执行。
+ * 数据点增序排列，权重为`REF`<`ONE`<`FOR`<`END`，同级时算SQL位置。
 
-```mysql
--- RUN END 1234567890
-REPLACE INTO sys_hot_separation(table_name, checked_id, checked_tm) VALUES 
-('tx_parcel', 1234567890, now());
-```
+条件执行的例子，参考 `demo/sql/tree/*.sql`
 
 ### 5.5.输出执行 OUT
 
-与条件执行 `RUN` 一样的定义，只是不在源DB上执行，而是在目标DB上执行。
+与条件执行 `RUN` 一样的定义，但不在源DB上执行，而是在目标DB上执行。
 
-注意，在有`定义Def`结果集（`REF`或`STR`直接定义）的语句上，不能使用`OUT`。
-因为一个`占位`在运行时存在多值的情况，从而导致语义混乱或执行时错误。
+注意，在有`定义Def`语句（`REF`或`STR`直接定义）时，不能使用`OUT`。
+因为一个`占位`在运行时存在多值，从而导致语义混乱或执行时麻烦。
 
 ```mysql
 -- ENV DATE_FROM '2018-11-23 12:34:56'
@@ -424,11 +445,10 @@ sed -i 's/:3306)/:13306)/g' godbart.toml
  demo/sql/init/
 ```
 
-
 ### 6.5. Revi 版本控制
 
-执行revi中的脚本使 prd_2018 更新到 2018111103 版本（只有基础结构）。
-以为 prd_main 版本号比 2018111103 所以会跳过小版本的更新。
+执行revi中的脚本使 prd_2018 更新到 2018111103 版本（只有结构没有数据）。
+因为prd_main 版本号比 2018111103 所以会跳过小版本的更新。
 
 ```bash
 ./godbart revi \
@@ -445,7 +465,7 @@ sed -i 's/:3306)/:13306)/g' godbart.toml
 使用 diff 执行比较 prd_main 与 prd_2018, dev_main 差异。
 
 ```bash
-# 查看 prd_main dev_main的表名差异（默认）
+# 查看 prd_main 与 dev_main的表名差异（默认）
 ./godbart diff \
  -c godbart.toml \
  -s prd_main \
@@ -457,7 +477,7 @@ sed -i 's/:3306)/:13306)/g' godbart.toml
  -s prd_main \
  -k create \
   tx_parcel \
-  | tee /tmp/ddl-tx_parcel-main.sql
+| tee /tmp/ddl-tx_parcel-main.sql
 
 # 比较 tx_parcel 在prd_main和prd_2018详细差异
 ./godbart diff \
@@ -466,17 +486,47 @@ sed -i 's/:3306)/:13306)/g' godbart.toml
  -d prd_2018 \
  -k detail \
   tx_parcel \
-  | tee /tmp/diff-tx_parcel-main-2018.sql
+| tee /tmp/diff-tx_parcel-main-2018.sql
 ```
 
-### 6.7. Tree 迁移数据
+### 6.7. SqlX 静态分析
 
-按数据的业务关系，形成数据数，整棵迁移。
+静态分析 DataTree结构。
+
+```bash
+./godbart sqlx \
+ -c godbart.toml \
+ -e "DATE_FROM=2018-01-01 00:00:00" \
+ demo/sql/tree/tree.sql \
+ | tee /tmp/sqlx-tree.log
+```
+
+### 6.8. Tree 保存JSON
+
+把数据，保持成TSV（TAB分割），CSV（逗号分割）和JSON。
+此例中，有`脱引号`，`模式展开` 的组合。
+
+```bash
+# 危险动作，先保持日志查看
+./godbart tree \
+ -c godbart.toml \
+ -s prd_main \
+ -e "DATE_FROM=2018-01-01 00:00:00" \
+ demo/sql/tree/json.sql \
+ | tee /tmp/tree-main-json.log
+ 
+#分离和处理，去掉注释和结束符
+cat /tmp/tree-main-json.log \
+| grep -E '^--' | grep -vE  "^(-- )+(SRC|OUT)" \
+| sed -E 's/^-- |;$//g' \
+| tee /tmp/tree-main-json.txt
+```
+### 6.9. Tree 迁移数据
 
 此例中，因为危险操作比较多，务必先分离脚本，人工确认。
-脚本可以在对应的数据库上执行，需要注意二进制或字符串转义。
+脚本99%可以执行，在二进制或转义字符转换字面量可能有遗漏。
 
-对于复杂数据类型，可`--agree`，在程序中以动态数据来执行。
+字面量不好描述的类型，可`--agree`，在程序中以动态数据来执行。
 
 ```bash
 # 危险动作，先保持日志查看
@@ -484,13 +534,32 @@ sed -i 's/:3306)/:13306)/g' godbart.toml
  -c godbart.toml \
  -s prd_main \
  -d prd_2018 \
- -e "DATE_FROM=2018-11-23 12:34:56" \
+ -e "DATE_FROM=2018-01-01 00:00:00" \
  demo/sql/tree/tree.sql \
- | tee /tmp/tree-main-2018.log
+2>&1| tee /tmp/tree-main-2018-all.log
  
-# 过滤出目标库脚本
-cat /tmp/tree-main-2018.log \
-| grep -E '^--' | cut -c 4- | grep -v  "SRC" \
-| tee /tmp/tree-main-2018_out.log
+# 获得全部SQL
+cat /tmp/tree-main-2018-all.log \
+| grep -vE '^[0-9]{4}/[0-9]{2}|^$' \
+| tee /tmp/tree-main-2018-all.sql
 
+# 获得源库SQL
+cat /tmp/tree-main-2018-all.sql \
+| grep -E '^[^-]|-- SRC' \
+| tee /tmp/tree-main-2018-src.sql
+
+# 获得目标库SQL
+cat /tmp/tree-main-2018-all.sql \
+| grep -E '^--' | cut -c 4- | grep -v  "-- SRC" \
+| tee /tmp/tree-main-2018-out.sql
+
+# 直接执行
+./godbart tree \
+ -c godbart.toml \
+ -s prd_main \
+ -d prd_2018 \
+ -e "DATE_FROM=2018-01-01 00:00:00" \
+ --agree \
+ demo/sql/tree/tree.sql \
+2>&1| tee /tmp/tree-main-2018-all.log
 ```

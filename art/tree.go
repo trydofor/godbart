@@ -1,6 +1,7 @@
 package art
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
 	"log"
@@ -9,24 +10,11 @@ import (
 	"strings"
 )
 
-const (
-	ParaFor = "FOR"
-	ParaEnd = "END"
-	ParaHas = "HAS"
-	ParaNot = "NOT"
-)
-
 func Tree(pref *Preference, envs map[string]string, srce *DataSource, dest []*DataSource, file []FileEntity, risk bool) error {
 
-	sqlx := make([]*SqlExe, 0, len(file))
-	for _, f := range file {
-		sqls := ParseSqls(pref, &f)
-		exe, er := ParseSqlx(sqls, envs)
-		if er != nil {
-			log.Fatalf("[ERROR] failed to parse sqlx, file=%s\n", f.Path)
-			return er
-		}
-		sqlx = append(sqlx, exe)
+	sqlx, err := ParseTree(pref, envs, file)
+	if err != nil {
+		return err
 	}
 
 	scon, err := openDbAndLog(srce)
@@ -53,6 +41,20 @@ func Tree(pref *Preference, envs map[string]string, srce *DataSource, dest []*Da
 	return nil
 }
 
+func ParseTree(pref *Preference, envs map[string]string, file []FileEntity) ([]*SqlExe, error) {
+	sqlx := make([]*SqlExe, 0, len(file))
+	for _, f := range file {
+		sqls := ParseSqls(pref, &f)
+		exe, er := ParseSqlx(sqls, envs)
+		if er != nil {
+			log.Fatalf("[ERROR] failed to parse sqlx, file=%s\n", f.Path)
+			return nil, er
+		}
+		sqlx = append(sqlx, exe)
+	}
+	return sqlx, nil
+}
+
 func RunSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, test bool) error {
 
 	ctx := make(map[string]interface{}) // 存放select的REF
@@ -62,16 +64,44 @@ func RunSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, test bo
 	}
 
 	ncm, lcm, dlt := "\n"+pref.LineComment+" ", pref.LineComment, pref.DelimiterRaw
-	var outf = func(str string, need, src bool) {
-		if !need {
-			return
+	var outf = func(exe *Exe, sql string, src bool) {
+
+		rsrc, rout := takeSrcOutAct(exe)
+		if src {
+			if !rsrc {
+				return
+			}
+		} else {
+			if !rout {
+				return
+			}
 		}
 
+		one, end, ech := actOneEndFor(exe)
+		buf := bytes.NewBuffer(make([]byte, 0, 50))
+		buf.WriteString("LINE=")
+		buf.WriteString(exe.Seg.Line)
+
+		if ech {
+			buf.WriteString(", FOR")
+		}
+		if end {
+			buf.WriteString(", END")
+		}
+		if one {
+			buf.WriteString(", ONE")
+		}
+
+		if len(exe.Deps) > 0 && !ech && !end && !one {
+			buf.WriteString(", DEP")
+		}
+
+		info := buf.String()
 		if src {
-			fmt.Printf("%s%s SRC\n%s%s\n", ncm, lcm, str, dlt)
+			fmt.Printf("%s%s SRC %s\n%s%s\n", ncm, lcm, info, sql, dlt)
 		} else {
-			ddq := strings.Replace(str, "\n", ncm, -1)
-			fmt.Printf("%s%s OUT\n%s %s%s\n", ncm, lcm, lcm, ddq, dlt)
+			ddq := strings.Replace(sql, "\n", ncm, -1)
+			fmt.Printf("%s%s OUT %s\n%s %s%s\n", ncm, lcm, info, lcm, ddq, dlt)
 		}
 	}
 
@@ -87,7 +117,7 @@ func RunSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, test bo
 
 var defValCol = regexp.MustCompile(`(VAL|COL)\[([^\[\]]*)\]`)
 
-func RunExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, outf func(str string, need, src bool), risk bool) error {
+func RunExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, outf func(exe *Exe, str string, src bool), risk bool) error {
 
 	// 判断数据源和执行条件
 	if arg, igr := skipHasNotRun(src, exe.Acts, ctx); igr {
@@ -102,9 +132,8 @@ func RunExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 	}
 
 	// \n-- 前缀
-	rsrc, rout := takeSrcOutAct(exe)
-	outf(prnt, rsrc, true)
-	outf(prnt, rout, false)
+	outf(exe, prnt, true)
+	outf(exe, prnt, false)
 
 	line := exe.Seg.Line
 	log.Printf("[TRACE] ready to run, line=%s, stmt=%#v\n", line, stmt)
@@ -175,7 +204,8 @@ func RunExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 							ctx[hld] = vals[i]
 							dbt := cols[i].DatabaseTypeName()
 							ctx[hld+":DatabaseTypeName"] = dbt
-							log.Printf("[TRACE]     simple usr DEF, hold=%s, para=%s, dbtype=%s\n", hld, ptn, dbt)
+							ltr, _ := src.Literal(vals[i], dbt)
+							log.Printf("[TRACE]     simple usr DEF, hold=%s, para=%s, value=%s\n", hld, ptn, ltr)
 							lost = false
 							break
 						}
@@ -186,12 +216,12 @@ func RunExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 					}
 				}
 
-				// 遍历FOR子树
+				// 遍历子树, ONE,FOR,END
 				for _, son := range exe.Sons {
-					if !shouldForAct(son) {
+					if !shouldForAct(son, cnt) {
 						continue
 					}
-					log.Printf("[TRACE] fork FOR child, line=%s, parent=%s\n", son.Seg.Line, line)
+					log.Printf("[TRACE] fork ONE/FOR child, line=%s, parent=%s\n", son.Seg.Line, line)
 					er := RunExe(son, src, dst, ctx, outf, risk)
 					if er != nil {
 						return er
@@ -202,7 +232,7 @@ func RunExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 			// 有记录时，遍历END子树
 			if cnt > 0 {
 				for _, son := range exe.Sons {
-					if !shouldEndAct(son) {
+					if !shouldEndAct(son, cnt) {
 						continue
 					}
 					log.Printf("[TRACE] fork END child=%s, parent=%s\n", son.Seg.Line, line)
@@ -303,29 +333,59 @@ func takeSrcOutAct(exe *Exe) (bool, bool) {
 	return src, out
 }
 
-func shouldForAct(exe *Exe) bool {
-	// 有END时，必须有FOR
-	// 默认是FOR
-	if shouldEndAct(exe) {
-		for _, arg := range exe.Acts {
-			if arg.Para == ParaFor {
-				return true
-			}
+func actOneEndFor(exe *Exe) (one, end, ech bool) {
+	one, end, ech = false, false, false
+	for _, arg := range exe.Acts {
+		switch arg.Para {
+		case ParaOne:
+			one = true
+		case ParaFor:
+			ech = true
+		case ParaEnd:
+			end = true
 		}
-		return false
-	} else {
-		return true
 	}
+
+	return
 }
 
-func shouldEndAct(exe *Exe) bool {
-	for _, arg := range exe.Acts {
-		if arg.Para == ParaEnd {
+func shouldForAct(exe *Exe, cnt int) bool {
+
+	one, end, ech := actOneEndFor(exe)
+
+	// 有END时，必须有FOR
+	if end {
+		return ech
+	}
+
+	// 有ONE时,执行对一个
+	if one {
+		if ech {
 			return true
+		} else {
+			return cnt == 1
 		}
 	}
 
-	return false
+	// 默认是FOR
+	return true
+}
+
+func shouldEndAct(exe *Exe, cnt int) bool {
+
+	one, end, ech := actOneEndFor(exe)
+
+	// 有FOR的时候，END会在FOR中执行
+	if ech {
+		return false
+	}
+
+	// 只有一条记录，且被ONE执行过了
+	if one && cnt == 1 {
+		return false
+	}
+
+	return end
 }
 
 var nxl = []interface{}{}
@@ -462,12 +522,12 @@ func buildStatement(exe *Exe, ctx map[string]interface{}, src *MyConn) (stmt, pr
 							return
 						}
 						mval = append(mval, dv, hv)
-						log.Printf("[TRACE]  get %d VAL values. hold=%s, para=%s", k, hld, ptn)
+						log.Printf("[TRACE]  get %d VAL values. hold=%s, para=%s", len(dv.([]string)), hld, ptn)
 					}
 				}
 
 				// 处理数据
-				log.Printf("[TRACE] processing pattern STR with %d iterms", itct)
+				log.Printf("[TRACE] processing pattern STR with %d items", itct)
 				for k := 0; k < itct; k++ {
 					if k > 0 {
 						rtn.WriteString(jner)

@@ -9,8 +9,8 @@ import (
 func Test_ParseSql(t *testing.T) {
 
 	//file := "../demo/sql/tree/test.sql"
-	file := "../demo/sql/tree/tree.sql"
-	//file := "../demo/sql/init/1.table.sql"
+	//file := "../demo/sql/tree/tree.sql"
+	file := "../demo/sql/init/2.data.sql"
 
 	bytes, err := ioutil.ReadFile(file)
 	panicIfErr(err)

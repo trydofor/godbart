@@ -9,47 +9,67 @@ import (
 
 func Exec(pref *Preference, dest []*DataSource, file []FileEntity, risk bool) error {
 
-	fln := len(file)
-	sqls := make([]*Sqls, 0, fln)
-	cur, cnt := 0, 0
-	for _, f := range file {
+
+	stmc,flln,cnln := 0,len(file),len(dest)
+	sqls := make([]*Sqls, flln)
+
+	// 解析和计算执行语句
+	for i, f := range file {
 		sql := ParseSqls(pref, &f)
 		for _, v := range sql {
 			if v.Type != SegCmt {
-				cnt++
+				stmc++
 			}
 		}
-		sqls = append(sqls, &sql)
+		sqls[i] = &sql
 	}
 
-	log.Printf("[TRACE] exec statements, sqls=%d, files=%d\n", cnt, fln)
+	log.Printf("[TRACE] exec statements, sqls=%d, files=%d\n", stmc, flln)
 
-	for i := 0; i < fln; i++ {
-		sqli := sqls[i]
-		log.Printf("[TRACE] exec file=%s\n", file[i].Path)
-		wg := &sync.WaitGroup{}
-		for _, v := range dest {
-			conn, er := openDbAndLog(v)
-			if er != nil {
-				continue
-			}
+	// 打开链接
+	wg := &sync.WaitGroup{}
+	conn := make([]*MyConn, cnln)
+	for i, v := range dest {
+		con, er := openDbAndLog(v)
+		if er != nil {
+			return errorAndLog("failed to open db=%s, err=%#v", v.Code, er)
+		}
+		conn[i] = con
+		wg.Add(1)
+	}
 
-			wg.Add(1)
-			if risk {
-				goExec(wg, pref, sqli, conn, cur, cnt, risk)
-			} else {
-				go goExec(wg, pref, sqli, conn, cur, cnt, risk)
+	// 多库并发，单库有序
+	for i := 0; i < cnln; i++ {
+		cur, con := 0, conn[i]
+
+		var runner = func() {
+			defer wg.Done()
+			for j := 0; j < flln; j++ {
+				pcnt, sqlj := 0, sqls[j]
+				log.Printf("[TRACE] exec db=%s, file=%s\n", con.DbName(), file[j].Path)
+
+				for _, sql := range *sqlj {
+					if sql.Type != SegCmt {
+						pcnt++
+					}
+				}
+				execEach(pref, sqlj, con, cur, stmc, risk)
+				cur = cur + pcnt
 			}
 		}
-		cur = cur + len(*sqli)
-		wg.Wait()
+
+		if risk {
+			go runner()
+		} else {
+			runner()
+		}
 	}
 
+	wg.Wait()
 	return nil
 }
 
-func goExec(wg *sync.WaitGroup, pref *Preference, sqls *Sqls, conn Conn, cur, cnt int, risk bool) {
-	defer wg.Done()
+func execEach(pref *Preference, sqls *Sqls, conn Conn, cur, cnt int, risk bool) {
 	cmn, dlt := pref.LineComment, pref.DelimiterRaw
 	for _, sql := range *sqls {
 		if sql.Type != SegCmt {
@@ -72,5 +92,9 @@ func goExec(wg *sync.WaitGroup, pref *Preference, sqls *Sqls, conn Conn, cur, cn
 			}
 		}
 	}
-	log.Printf("[TRACE] db=%s, %d/%d, this part is done\n\n", conn.DbName(), cur, cnt)
+	if cur != cnt {
+		log.Printf("[TRACE] db=%s, %d/%d, partly done\n\n", conn.DbName(), cur, cnt)
+	} else {
+		log.Printf("[TRACE] db=%s, sqls=%d, whole done\n\n", conn.DbName(), cnt)
+	}
 }

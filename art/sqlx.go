@@ -15,9 +15,16 @@ const (
 	CmndStr = "STR"
 	CmndRun = "RUN"
 	CmndOut = "OUT"
+	//
+	ParaFor = "FOR"
+	ParaOne = "ONE"
+	ParaEnd = "END"
+	ParaHas = "HAS"
+	ParaNot = "NOT"
 )
 
 var cmdArrs = []string{CmndEnv, CmndRef, CmndStr, CmndRun, CmndOut}
+var paraWgt = []string{ParaOne, ParaFor, ParaEnd} // `REF`<`ONE`<`FOR`<`END`
 
 var argsReg = regexp.MustCompile(`(?i)` + // 不区分大小写
 	`^[^0-9A-Z]*` + // 非英数开头，视为注释部分
@@ -70,22 +77,22 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 	holdStr := make(map[string]bool)   // HOLD为STR指令的
 	lineArg := make(map[string][]*Arg) // 语句块和ARG
 
-	var exes []*Exe
+	var tops, alls []*Exe
 	argx := make(map[string]*Arg)   // hold对应的Arg
 	envx := make(map[string]string) // hold对应的ENV
 
-	sonFunc := func(pa, exe *Exe, top *bool) {
+	sonFunc := func(prn, exe *Exe, top *bool) {
 		h := true
 
-		for i := len(pa.Sons) - 1; i >= 0; i-- {
-			if pa.Sons[i].Seg.Head == exe.Seg.Head {
+		for i := len(prn.Sons) - 1; i >= 0; i-- {
+			if prn.Sons[i].Seg.Head == exe.Seg.Head {
 				h = false
 				break
 			}
 		}
 
 		if h {
-			pa.Sons = append(pa.Sons, exe)
+			prn.Sons = append(prn.Sons, exe)
 		}
 		*top = false
 	}
@@ -260,8 +267,10 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 		}
 
 		if top {
-			exes = append(exes, exe)
+			tops = append(tops, exe)
 		}
+
+		alls = append(alls, exe)
 		log.Printf("[TRACE] done an Exe, line=%s, file=%s\n\n", seg.Line, seg.File)
 	}
 
@@ -277,10 +286,101 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 		}
 	}
 
+	// 重排Sons，权重 `REF`<`ONE`<`FOR`<`END`，同级时算SQL位置。
+	for i := 0; i < len(alls); i++ {
+
+		rs := false
+		if sons := alls[i].Sons; len(sons) > 0 {
+			sort.Slice(sons, func(i, j int) bool {
+				si, sj := sons[i], sons[j]
+				wi, wj := -1, -1
+				for _, v := range si.Acts {
+					if w := weightArg(v); wi < w {
+						wi = w
+					}
+				}
+				for _, v := range sj.Acts {
+					if w := weightArg(v); wj < w {
+						wj = w
+					}
+				}
+
+				ls := false
+				if wi == wj {
+					ls = si.Seg.Head < sj.Seg.Head
+				} else {
+					ls = wi < wj
+				}
+				if !ls {
+					rs = true
+				}
+
+				return ls
+			})
+		}
+
+		if rs {
+			log.Printf("[TRACE] resort Sons, line=%s\n", alls[i].Seg.Line)
+		}
+	}
+
 	log.Printf("[TRACE] done SQLX\n\n")
 
-	sqlx := &SqlExe{envx, exes}
+	sqlx := &SqlExe{envx, tops}
 	return sqlx, nil
+}
+
+func (x Exe) String() string {
+	sb := strings.Builder{}
+	sb.WriteString(fmt.Sprintf("\n{\nSql:%#v", x.Seg))
+
+	if len(x.Defs) > 0 {
+		sb.WriteString(" \nDefs:[")
+		for h, p := range x.Defs {
+			sb.WriteString(fmt.Sprintf("\n   hold:%s, para:%s", h, p))
+		}
+		sb.WriteString("]")
+	}
+
+	if len(x.Acts) > 0 {
+		sb.WriteString(" \nActs:[")
+		for _, v := range x.Acts {
+			sb.WriteString(fmt.Sprintf("\n   %#v", *v))
+		}
+		sb.WriteString("]")
+	}
+	if len(x.Deps) > 0 {
+		sb.WriteString(" \nDeps:[")
+		for _, v := range x.Deps {
+			sb.WriteString(fmt.Sprintf("\n   %#v", v))
+		}
+		sb.WriteString("]")
+	}
+	if len(x.Sons) > 0 {
+		sb.WriteString(" \nSons:[")
+		for _, v := range x.Sons {
+			son := fmt.Sprintf("%v", v)
+			sb.WriteString(fmt.Sprintf("%s", strings.Replace(son, "\n", "\n   |    ", -1)))
+		}
+		sb.WriteString("]")
+	}
+	sb.WriteString("\n}")
+	return sb.String()
+}
+
+func weightArg(p *Arg) int {
+	switch p.Type {
+	case CmndRun, CmndOut:
+		for i, v := range paraWgt {
+			if p.Para == v {
+				return i
+			}
+		}
+
+		return -1
+	default:
+		return -1
+	}
 }
 
 func parseArgs(text string, h int) (args []*Arg) {
@@ -295,7 +395,7 @@ func parseArgs(text string, h int) (args []*Arg) {
 			if cmd == CmndRun || cmd == CmndOut {
 				sm[2] = strings.ToUpper(sm[2]) // 命令变量大写
 			} else if cmd == CmndRef || cmd == CmndEnv {
-				if cp := countQuotePair(sm[2]); cp > 0 { //脱去最外层引号
+				if cp := countQuotePair(sm[2]); cp > 0 { //脱去变量最外层引号
 					sm[2] = sm[2][1 : len(sm[2])-1]
 				}
 			} else if cmd == CmndStr { // 相同才脱引号
