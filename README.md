@@ -79,7 +79,8 @@
  * `-c` 必填，配置文件位置。
  * `-d` 必填，目标数据库，可以指定多个。
  * `-r` 必填，执行到的版本号。
- * `-m` 选填，更新版本语句的Revision规则，默认10位以上数字。
+ * `-m` 选填，更新版本语句的Revision正则，默认10位以上数字。
+ * `-q` 选填，查询版本语句的前缀，`SELECT` 不区分大小写。
  * `-x` 选填，SQL文件后缀，不区分大小写。
  * `--agree` 选填，风险自负，真正执行。
 
@@ -166,6 +167,13 @@ REPLACE INTO sys_schema_version (version, created) VALUES( 2018022801, NOW());
  -e "DATE_FROM=2018-11-23 12:34:56" \
  demo/sql/tree/tree.sql
  > main-tree-out.log
+
+# 静态分析树结构
+./godbart sqlx \
+ -c godbart.toml \
+ -e "DATE_FROM=2018-01-01 00:00:00" \
+ demo/sql/tree/tree.sql \
+ | tee /tmp/sqlx-tree.log
 ```
 
 不同业务场景对`数据活性`有不同的定义，比如日期，按ID范围等。
@@ -383,13 +391,19 @@ REPLACE INTO tx_parcel VALUES(1234567890);
 ### 6.1. 获得执行文件
 
 ```bash
-# 下载，也可以直接下载release文件，直接到unzip步骤
+### 方法一：下载 ###
+# 直接下载release文件，直接到unzip步骤
 # https://github.com/trydofor/godbart/releases
+
+### 方法二：编译 ###
 
 git clone https://github.com/trydofor/godbart.git
 cd godbart
 
-# 编译
+# 单平台编译
+GOOS=linux GOARCH=amd64 go build
+
+# 或全平台发布
 chmod +x build.sh
 ./build.sh
 

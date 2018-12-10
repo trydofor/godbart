@@ -8,15 +8,12 @@ import (
 
 const (
 	Joiner = "\n"
-	SegCmt = 0
-	SegRow = 1
-	SegExe = 2
 )
 
 type Sql struct {
 	Line string // 开始和结束行，全闭区间
 	Head int    // 首行
-	Type int    // 0:注释, 1:SELECT, 2:执行语句
+	Exeb bool   // 语句，注释
 	File string // 文件名或名字
 	Text string // 正文部分
 }
@@ -101,7 +98,7 @@ func parseComment(segs *[]Sql, lines []string, name string, b *int, e int) {
 	head := *b + 1
 	line := fmt.Sprintf("%d:%d", head, i)
 	*segs = append(*segs, Sql{
-		line, head, SegCmt, name, text,
+		line, head, false, name, text,
 	})
 	log.Printf("[TRACE] %3d, parsed Comment, line=%s\n", len(*segs), line)
 	*b = -1
@@ -114,14 +111,6 @@ func parseStatement(segs *[]Sql, lines []string, name string, b *int, e int, dt 
 
 	lns, lne := *b, e+1
 	dtl, dcl := len(*dt), len(dc)
-
-	typ := func(sql string) int {
-		if len(sql) > 6 && strings.EqualFold("SELECT", sql[0:6]) {
-			return SegRow
-		} else {
-			return SegExe
-		}
-	}
 
 	for i := lns; i < lne; i++ {
 		lll := len(lines[i])
@@ -137,7 +126,7 @@ func parseStatement(segs *[]Sql, lines []string, name string, b *int, e int, dt 
 					*segs = append(*segs, Sql{
 						line,
 						head,
-						typ(lines[lns]),
+						true,
 						name,
 						strings.Join(lines[lns:i], Joiner),
 					})
@@ -157,7 +146,7 @@ func parseStatement(segs *[]Sql, lines []string, name string, b *int, e int, dt 
 			*segs = append(*segs, Sql{
 				line,
 				head,
-				typ(lines[lns]),
+				true,
 				name,
 				strings.Join(lines[lns:n], Joiner),
 			})
@@ -173,7 +162,7 @@ func parseStatement(segs *[]Sql, lines []string, name string, b *int, e int, dt 
 		*segs = append(*segs, Sql{
 			line,
 			head,
-			typ(lines[lns]),
+			true,
 			name,
 			strings.Join(lines[lns:lne], Joiner),
 		})

@@ -100,7 +100,7 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 	iarg := -1
 	for i, seg := range sqls {
 		// 解析指令
-		if seg.Type == SegCmt {
+		if !seg.Exeb {
 			if iarg < 0 {
 				iarg = i
 			}
@@ -342,13 +342,6 @@ func (x Exe) String() string {
 		sb.WriteString("]")
 	}
 
-	if len(x.Acts) > 0 {
-		sb.WriteString(" \nActs:[")
-		for _, v := range x.Acts {
-			sb.WriteString(fmt.Sprintf("\n   %#v", *v))
-		}
-		sb.WriteString("]")
-	}
 	if len(x.Deps) > 0 {
 		sb.WriteString(" \nDeps:[")
 		for _, v := range x.Deps {
@@ -356,11 +349,23 @@ func (x Exe) String() string {
 		}
 		sb.WriteString("]")
 	}
+
+	if len(x.Acts) > 0 {
+		sb.WriteString(" \nActs:[")
+		for i, v := range x.Acts {
+			sb.WriteString(fmt.Sprintf("\n   %d:%#v", i, *v))
+		}
+		sb.WriteString("]")
+	}
+
 	if len(x.Sons) > 0 {
 		sb.WriteString(" \nSons:[")
-		for _, v := range x.Sons {
+		for i, v := range x.Sons {
 			son := fmt.Sprintf("%v", v)
-			sb.WriteString(fmt.Sprintf("%s", strings.Replace(son, "\n", "\n   |    ", -1)))
+			idx := fmt.Sprintf("{ // index=%d", i)
+			son = strings.Replace(son, "{", idx, 1)
+			son = strings.Replace(son, "\n", "\n   |    ", -1)
+			sb.WriteString(son)
 		}
 		sb.WriteString("]")
 	}

@@ -9,15 +9,14 @@ import (
 
 func Exec(pref *Preference, dest []*DataSource, file []FileEntity, risk bool) error {
 
-
-	stmc,flln,cnln := 0,len(file),len(dest)
+	stmc, flln, cnln := 0, len(file), len(dest)
 	sqls := make([]*Sqls, flln)
 
 	// 解析和计算执行语句
 	for i, f := range file {
 		sql := ParseSqls(pref, &f)
 		for _, v := range sql {
-			if v.Type != SegCmt {
+			if v.Exeb {
 				stmc++
 			}
 		}
@@ -49,7 +48,7 @@ func Exec(pref *Preference, dest []*DataSource, file []FileEntity, risk bool) er
 				log.Printf("[TRACE] exec db=%s, file=%s\n", con.DbName(), file[j].Path)
 
 				for _, sql := range *sqlj {
-					if sql.Type != SegCmt {
+					if sql.Exeb {
 						pcnt++
 					}
 				}
@@ -72,7 +71,7 @@ func Exec(pref *Preference, dest []*DataSource, file []FileEntity, risk bool) er
 func execEach(pref *Preference, sqls *Sqls, conn Conn, cur, cnt int, risk bool) {
 	cmn, dlt := pref.LineComment, pref.DelimiterRaw
 	for _, sql := range *sqls {
-		if sql.Type != SegCmt {
+		if sql.Exeb {
 			cur++
 			if !risk {
 				// 不处理 trigger 新结束符问题。

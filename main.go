@@ -129,9 +129,10 @@ func revi(ctx *cli.Context) (err error) {
 	dest := checkDest(ctx, conf, true)
 	revi := ctx.String("r")
 	mask := ctx.String("m")
+	rqry := ctx.String("q")
 	risk := checkRisk(ctx)
 	sqls := checkSqls(ctx)
-	return art.Revi(&conf.Preference, dest, sqls, revi, mask, risk)
+	return art.Revi(&conf.Preference, dest, sqls, revi, mask, rqry, risk)
 }
 
 func diff(ctx *cli.Context) error {
@@ -182,7 +183,7 @@ func main() {
 	app := cli.NewApp()
 
 	app.Author = "github.com/trydofor"
-	app.Version = "0.9.1"
+	app.Version = "0.9.2"
 	app.Compiled = time.Now()
 
 	app.Name = "godbart"
@@ -219,8 +220,14 @@ func main() {
 
 	maskFlag := &cli.StringFlag{
 		Name:  "m",
-		Usage: "the (M)ask of the revision",
+		Usage: "the (M)ask (regexp) of the revision",
 		Value: "[0-9]{10,}",
+	}
+
+	rqryFlag := &cli.StringFlag{
+		Name:  "q",
+		Usage: "the (Q)uery Prefix (string) of revision",
+		Value: "SELECT",
 	}
 
 	reviFlag := &cli.StringFlag{
@@ -240,7 +247,7 @@ func main() {
 
 	sufxFlag := &cli.StringSliceFlag{
 		Name:  "x",
-		Usage: "the Suffi(X) of SQL files. eg \".sql\"",
+		Usage: "the Suffi(X) (string) of SQL files. eg \".sql\"",
 	}
 
 	//
@@ -267,6 +274,7 @@ func main() {
 				destFlag,
 				reviFlag,
 				maskFlag,
+				rqryFlag,
 				riskFlag,
 			},
 			Action: revi,

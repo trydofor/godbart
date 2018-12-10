@@ -14,7 +14,7 @@ type ReviSeg struct {
 	segs []Sql
 }
 
-func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi string, mask string, risk bool) error {
+func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi, mask, rqry string, risk bool) error {
 
 	mreg, err := regexp.Compile(mask)
 	if err != nil {
@@ -25,6 +25,11 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi string, 
 	var reviSegs []ReviSeg
 	reviFind, reviCurr := false, ""
 	var reviSlt, reviUdp string
+
+	if len(rqry) == 0 {
+		rqry = "SELECT"
+	}
+	rlen := len(rqry)
 
 	// 倒序分版本块
 	for k := len(file) - 1; k >= 0; k-- {
@@ -38,8 +43,13 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi string, 
 			v := sqls[i]
 			// find and check SELECT REVI
 			for j := i; j < idxRevi; j++ {
-				w := sqls[j]
-				if w.Type == SegRow {
+
+				if w := sqls[j]; w.Exeb {
+
+					if len(w.Text) < rlen || !strings.EqualFold(rqry, w.Text[0:rlen]) {
+						continue
+					}
+
 					if len(reviSlt) == 0 {
 						reviSlt = w.Text
 						log.Printf("[TRACE] find SLT-REVI-SQL, file=%s, line=%s, sql=%s\n", w.File, w.Line, w.Text)
@@ -63,7 +73,7 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi string, 
 
 		for i := idxRevi; i >= 0; i-- {
 			v := sqls[i]
-			if v.Type == SegExe {
+			if v.Exeb {
 				r := findUpdRevi(v.Text, reviUdp, mreg)
 
 				if len(reviUdp) == 0 { // first
@@ -140,14 +150,15 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi string, 
 
 	// 多库并发，单库有序
 	for i := 0; i < cnln; i++ {
+		con := conn[i]
+		var runner = func() {
+			defer wg.Done()
+			ReviEach(pref, reviSegs, con, reviSlt, mreg, risk)
+		}
 		if risk {
-			con := conn[i]
-			go func() {
-				defer wg.Done()
-				ReviEach(pref, reviSegs, con, reviSlt, mreg, risk)
-			}()
+			go runner()
 		} else {
-			ReviEach(pref, reviSegs, conn[i], reviSlt, mreg, risk)
+			runner()
 		}
 	}
 
@@ -210,7 +221,7 @@ func ReviEach(pref *Preference, revs []ReviSeg, conn Conn, slt string, mask *reg
 	cur, cnt := 0, 0
 	for _, s := range revs {
 		for _, v := range s.segs {
-			if v.Type != SegCmt {
+			if v.Exeb {
 				cnt++
 			}
 		}
@@ -221,7 +232,7 @@ func ReviEach(pref *Preference, revs []ReviSeg, conn Conn, slt string, mask *reg
 
 		pcnt := 0
 		for _, v := range s.segs {
-			if v.Type != SegCmt {
+			if v.Exeb {
 				pcnt++
 			}
 		}
@@ -234,7 +245,7 @@ func ReviEach(pref *Preference, revs []ReviSeg, conn Conn, slt string, mask *reg
 
 		log.Printf("[TRACE] db=%s, revi=%s, sqls=%d\n", conn.DbName(), s.revi, pcnt)
 		for _, v := range s.segs {
-			if v.Type == SegCmt {
+			if !v.Exeb {
 				continue
 			}
 
