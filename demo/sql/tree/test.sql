@@ -26,7 +26,7 @@ SELECT * FROM tx_parcel WHERE create_time > '2018-11-23 12:34:56' LIMIT 2;
 REPLACE INTO tx_parcel ($COLX) VALUES ('多值占位值');
 
 -- 替换后
--- INSERT INTO tx_parcel (`id`) VALUES ('多值占位值');
+-- REPLACE INTO tx_parcel (`id`) VALUES ('多值占位值');
 
 UPDATE tx_parcel SET logno = -99009 WHERE id = 990001;
 -- 替换后
