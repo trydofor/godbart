@@ -151,6 +151,7 @@ func tree(ctx *cli.Context) error {
 	dest := checkDest(ctx, conf, false)
 	risk := checkRisk(ctx)
 	sqls := checkSqls(ctx)
+	go art.CtrlRoom.Open(conf.Preference.ControlPort, art.CtrlRoomTree)
 	return art.Tree(&conf.Preference, conf.StartupEnv, srce, dest, sqls, risk)
 }
 
@@ -164,6 +165,11 @@ func sqlx(ctx *cli.Context) error {
 	}
 
 	for i, t := range sqlx {
+		fmt.Printf("\n==== summary=%s ====", sqls[i].Path)
+		for _, x := range t.Exes {
+			fmt.Printf("\n%s", x.Tree())
+		}
+
 		fmt.Printf("\n==== envx file=%s ====", sqls[i].Path)
 		for k, v := range t.Envs {
 			fmt.Printf("\n%s=%s", k, v)

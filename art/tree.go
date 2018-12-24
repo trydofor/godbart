@@ -32,6 +32,7 @@ func Tree(pref *Preference, envs map[string]string, srce *DataSource, dest []*Da
 	}
 
 	for _, exe := range sqlx {
+		CtrlRoom.putEnv(roomTreeEnvSqlx, exe)
 		er := RunSqlx(pref, exe, scon, dcon, risk)
 		if er != nil {
 			return er
@@ -55,7 +56,7 @@ func ParseTree(pref *Preference, envs map[string]string, file []FileEntity) ([]*
 	return sqlx, nil
 }
 
-func RunSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, test bool) error {
+func RunSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, risk bool) error {
 
 	ctx := make(map[string]interface{}) // 存放select的REF
 
@@ -106,7 +107,7 @@ func RunSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, test bo
 	}
 
 	for _, exe := range sqlx.Exes {
-		er := RunExe(exe, src, dst, ctx, outf, test)
+		er := runExe(exe, src, dst, ctx, outf, risk)
 		if er != nil {
 			return er
 		}
@@ -117,7 +118,7 @@ func RunSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, test bo
 
 var defValCol = regexp.MustCompile(`(VAL|COL)\[([^\[\]]*)\]`)
 
-func RunExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, outf func(exe *Exe, str string, src bool), risk bool) error {
+func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, outf func(exe *Exe, str string, src bool), risk bool) error {
 
 	// 判断数据源和执行条件
 	if arg, igr := skipHasNotRun(src, exe.Acts, ctx); igr {
@@ -132,10 +133,17 @@ func RunExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 	}
 
 	// \n-- 前缀
+
 	outf(exe, prnt, true)
 	outf(exe, prnt, false)
 
+	head := exe.Seg.Head
 	line := exe.Seg.Line
+
+	defer func() {
+		CtrlRoom.dealJobx(nil, head)
+	}()
+
 	log.Printf("[TRACE] ready to run, line=%s, stmt=%#v\n", line, stmt)
 	if len(exe.Defs) > 0 { // 有结果集提取，不支持OUT
 		var ff = func(row *sql.Rows) error {
@@ -222,7 +230,7 @@ func RunExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 						continue
 					}
 					log.Printf("[TRACE] fork ONE/FOR child, line=%s, parent=%s\n", son.Seg.Line, line)
-					er := RunExe(son, src, dst, ctx, outf, risk)
+					er := runExe(son, src, dst, ctx, outf, risk)
 					if er != nil {
 						return er
 					}
@@ -236,7 +244,7 @@ func RunExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 						continue
 					}
 					log.Printf("[TRACE] fork END child=%s, parent=%s\n", son.Seg.Line, line)
-					er := RunExe(son, src, dst, ctx, outf, risk)
+					er := runExe(son, src, dst, ctx, outf, risk)
 					if er != nil {
 						return er
 					}
@@ -255,7 +263,6 @@ func RunExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 	} else {
 		rsrc, rout := takeSrcOutAct(exe)
 		dcnt := len(dst)
-
 		if risk {
 			if rsrc {
 				log.Printf("[TRACE] running on SRC db=%s\n", src.DbName())

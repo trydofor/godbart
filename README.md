@@ -33,13 +33,15 @@
 ```
 就可以形成以`收件人`为根的树，或从`包裹`为根的树。
 
-开发和测试环境，理论上跨平台。
+## 1. 场景举例
+
+以下是开发和测试环境，得益于GoLang的优势，理论上应该跨平台。
 
  * ubuntu 16.04 
  * Go 1.11.2
  * MySQL (5.7.23)
 
-## 1.执行脚本 Exec
+### 1.1. 执行脚本 Exec
 
 在不同的db上，纯粹的批量执行SQL。
 
@@ -60,7 +62,7 @@
  * `-x` 选填，SQL文件后缀，不区分大小写。
  * `--agree` 选填，风险自负，真正执行。
 
-## 2.版本管理 Revi
+### 1.2. 版本管理 Revi
 
 健康的数据库需要有版本管理。通常，有一个版本信息表，用来识别和对比版本号。
 `Revi`只考虑Up不考虑Down。如果需要Down时，以`逆向补丁`形式进行Up。
@@ -118,7 +120,7 @@ ALTER TABLE `tx_outer_trknum$log`
 REPLACE INTO sys_schema_version (version, created) VALUES( 2018022801, NOW());
 ```
 
-## 3.结构对比 Diff
+### 1.3. 结构对比 Diff
 
 用来对比结构差异，也能生成创建的SQL(DDL)，支持table&index，trigger。
 
@@ -156,7 +158,7 @@ REPLACE INTO sys_schema_version (version, created) VALUES( 2018022801, NOW());
 参数为需要对比的表的名字的正则表达式。如果参数为空，表示所有表。
 `-s`和`-d`，必须指定一个。只有一个时，仅打印该库，多个时才进行比较。
 
-## 4.数据迁移 Tree
+### 1.4. 数据迁移 Tree
 
 不建议一次转移大量数据，有概率碰到网络超时或内存紧张。
 
@@ -225,7 +227,34 @@ REPLACE INTO sys_hot_separation(table_name, checked_id, checked_tm) VALUES
 ('tx_parcel', 990002, now());
 ```
 
-## 5.指令变量
+### 1.5. 控制端口
+
+对于长时间执行的命令，支持单例和运行时控制（如优雅停止），因此增加了`控制端口`功能。
+其监听TCP端口（建议1024以上），当端口号≤0时，表示忽略此功能。
+开启`控制端口`时，会在stderr输入`控制密码`，通过`127.0.0.*`登录不需要密码。
+
+ * 单例，检测`控制端口`是否被监听，保证当前主机唯一单例。
+ * 控制，通过tcp链接，输入`控制密码`，验证后，执行支持的命令。
+
+全局命令：
+ * help - 查看帮助。
+ * exit - 关闭当前连接。
+ * pass - 生成一个新密码，作废旧密码，新登录有效。
+ * info - 查看当前用户和待执行的命令。
+ * kill N - 杀掉队列中id=N的任务，N=-1时，清掉全部。
+ * `/` 公聊，跟所有登录用户发消息。
+ * `/ip:port ` 私聊，指定登录用户发消息。
+
+只对`Tree`提供了以下命令，可使用不存在的id查看当前运行情况。
+ * tree - 显示当前在执行的sqlx的树状结构及ID。
+ * stop - 优雅的停止程序(exit 99)
+   - stop 直接在当前树结束时停止。
+   - stop N 在id=N的树时停止，N<0时等效于stop。
+ * wait - 执行等待，kill可继续。长时间停止可能导致数据库连接超时。
+   - wait 在当前树完成时等待。
+   - wait N 在id=N的树时停止，N<0时等效于stop。
+
+## 2. 指令变量
 
 `指令`在SQL的注释中定义，由`指令名`，`变量para`和`占位hold`三部分构成。
 `指令`保留SQL的可读性和执行能力，对DBA友好，在运行时进行静态或动态替换。
@@ -249,7 +278,7 @@ REPLACE INTO sys_hot_separation(table_name, checked_id, checked_tm) VALUES
     - 使用时，保留所有引号。
     - 选择`占位`，尽量构造出where条件为false的无公害SQL。
 
-### 5.1.环境变量 ENV
+### 2.1. 环境变量 ENV
 
 `ENV`通过 `-e MY_ENV="my val"`从命令行传入，全局有效。
 当只有Key时，表示使用系统变量，如 `-e PATH`。
@@ -275,7 +304,7 @@ SELECT * FROM tx_parcel WHERE create_time = '2018-11-23 12:34:56';
 -- SELECT * FROM tx_parcel WHERE create_time = ?
 ```
 
-### 5.2.结果引用 REF
+### 2.2. 结果引用 REF
 
 `REF` 也采用PreparedStatement替换，并对所在结果集的每条记录循环。
 多个`REF`会产生多个分叉点，进而形成不同的子数据树。
@@ -315,7 +344,7 @@ SELECT * FROM tx_parcel_event WHERE parcel_id = 1234567890;
  * 不能用`[`或`]`，因为你懂的。
  * 仅支持`\\`，`\t`，`\n`的字符转义。
 
-### 5.3.静态替换 STR
+### 2.3. 静态替换 STR
 
 `STR`与`ENV`和`REF`不同，采用的是静态替换字符串。
 它可以直接定义（同`REF`和`ENV`），也以重新电影其他`占位`。
@@ -355,7 +384,7 @@ UPDATE tx_parcel SET logno = -99009 WHERE id=990001;
 -- UPDATE tx_parcel SET `id` = ? ,`create_time` = ? /*循环加下去，逗号分割*/ WHERE id=990001;
 ```
 
-### 5.4.条件执行 RUN
+### 2.4. 条件执行 RUN
 
 执行条件由`REF`或`ENV`定义，只对所在的语句有效。
 
@@ -380,7 +409,7 @@ UPDATE tx_parcel SET logno = -99009 WHERE id=990001;
 
 条件执行的例子，参考 `demo/sql/tree/*.sql`
 
-### 5.5.输出执行 OUT
+### 2.5. 输出执行 OUT
 
 与条件执行 `RUN` 一样的定义，但不在源DB上执行，而是在目标DB上执行。
 
@@ -396,12 +425,12 @@ SELECT * FROM tx_parcel WHERE create_time = '2018-11-23 12:34:56';
 REPLACE INTO tx_parcel VALUES(1234567890);
 ```
 
-## 6.测试手册
+## 3. 测试手册
 
 使用工程中/demo/sql下的SQL进行所有功能的演示和测试。以下是准备工作，你必须都懂。
 注意，所有对数据库有写操作的命令，都需要增加`--agree`才会执行，否则仅输出预计结果。
 
-### 6.1. 获得执行文件
+### 3.1. 获得执行文件
 
 ```bash
 ### 方法一：下载 ###
@@ -427,7 +456,7 @@ unzip release/godbart-linux-amd64.zip
 # 得到 godbart 程序
 ```
 
-### 6.2. 修改数据源配置
+### 3.2. 修改数据源配置
 
 修改`godbart.toml`中的数据库用户名，密码，主机，端口等
 
@@ -442,7 +471,7 @@ sed -i 's/(127.0.0.1:/(127.0.0.9:/g' godbart.toml
 sed -i 's/:3306)/:13306)/g' godbart.toml
 ```
 
-### 6.3. 创建数据库
+### 3.3. 创建数据库
 
 ```bash
 # 存在一个可使用的数据库，如一般都有的test
@@ -460,7 +489,7 @@ sed -i 's/:3306)/:13306)/g' godbart.toml
  -p"moilioncircle"
 ```
 
-### 6.4. Exec 执行脚本
+### 3.4. Exec 执行脚本
 
 使用 exec 执行init中的脚本初始化 prd_main 数据库。
 
@@ -472,7 +501,7 @@ sed -i 's/:3306)/:13306)/g' godbart.toml
  demo/sql/init/
 ```
 
-### 6.5. Revi 版本控制
+### 3.5. Revi 版本控制
 
 执行revi中的脚本使 prd_2018 更新到 2018111103 版本（只有结构没有数据）。
 因为prd_main 版本号比 2018111103 所以会跳过小版本的更新。
@@ -487,7 +516,7 @@ sed -i 's/:3306)/:13306)/g' godbart.toml
  demo/sql/revi/
 ```
 
-### 6.6. Diff 结构差异
+### 3.6. Diff 结构差异
 
 使用 diff 执行比较 prd_main 与 prd_2018, dev_main 差异。
 
@@ -516,7 +545,7 @@ sed -i 's/:3306)/:13306)/g' godbart.toml
 | tee /tmp/diff-tx_parcel-main-2018.sql
 ```
 
-### 6.7. SqlX 静态分析
+### 3.7. SqlX 静态分析
 
 静态分析 DataTree结构。
 
@@ -528,7 +557,7 @@ sed -i 's/:3306)/:13306)/g' godbart.toml
  | tee /tmp/sqlx-tree.log
 ```
 
-### 6.8. Tree 保存JSON
+### 3.8. Tree 保存JSON
 
 把数据，保持成TSV（TAB分割），CSV（逗号分割）和JSON。
 此例中，有`脱引号`，`模式展开` 的组合。
@@ -548,7 +577,7 @@ cat /tmp/tree-main-json.log \
 | sed -E 's/^-- |;$//g' \
 | tee /tmp/tree-main-json.txt
 ```
-### 6.9. Tree 迁移数据
+### 3.9. Tree 迁移数据
 
 此例中，因为危险操作比较多，务必先分离脚本，人工确认。
 脚本99%可以执行，在二进制或转义字符转换字面量可能有遗漏。
@@ -591,7 +620,7 @@ cat /tmp/tree-main-2018-all.sql \
 2>&1| tee /tmp/tree-main-2018-all.log
 ```
 
-## 7. 不想理你的问题
+## 4. 不想理你的问题
 
 * Q01：使用中发现了问题，出现了BUG怎么办？
   -[x] 有能力hack code的，就提交PR。

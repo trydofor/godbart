@@ -331,7 +331,7 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 }
 
 func (x Exe) String() string {
-	sb := strings.Builder{}
+	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("\n{\nSql:%#v", x.Seg))
 
 	if len(x.Defs) > 0 {
@@ -370,6 +370,18 @@ func (x Exe) String() string {
 		sb.WriteString("]")
 	}
 	sb.WriteString("\n}")
+	return sb.String()
+}
+
+func (x *Exe) Tree() string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("\nid=%d", x.Seg.Head))
+	for _, v := range x.Sons {
+		son := fmt.Sprintf("%s", v.Tree())
+		son = strings.Replace(son, "\n", "\n  |  ", -1)
+		son = strings.Replace(son, "  id", "--id", -1)
+		sb.WriteString(son)
+	}
 	return sb.String()
 }
 

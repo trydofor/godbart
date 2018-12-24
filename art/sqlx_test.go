@@ -35,4 +35,9 @@ func Test_ParseSqlx(t *testing.T) {
 	for _, x := range sqlx.Exes {
 		fmt.Printf("%v\n", x)
 	}
+
+	fmt.Println("==== summary ====")
+	for _, x := range sqlx.Exes {
+		fmt.Printf("%v\n", x.Tree())
+	}
 }

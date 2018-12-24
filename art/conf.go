@@ -18,6 +18,7 @@ type Preference struct {
 	LineComment  string
 	MultComment  []string
 	FmtDateTime  string
+	ControlPort  int
 	ConnMaxOpen  int
 	ConnMaxIdel  int
 }
@@ -42,12 +43,14 @@ func ParseToml(text string) (config *Config, err error) {
 	}
 
 	prefTree := conf.Get("preference").(*toml.Tree)
+
 	databasetype := prefTree.Get("databasetype").(string)
 	delimiterraw := prefTree.Get("delimiterraw").(string)
 	delimitercmd := prefTree.Get("delimitercmd").(string)
 	linecomment := prefTree.Get("linecomment").(string)
 	multcomment := toArrString(prefTree.Get("multcomment"))
 	fmtdatetime := prefTree.Get("fmtdatetime").(string)
+	controlport := prefTree.Get("controlport").(int64)
 	connmaxopen := prefTree.Get("connmaxopen").(int64)
 	connmaxidel := prefTree.Get("connmaxidel").(int64)
 
@@ -63,6 +66,7 @@ func ParseToml(text string) (config *Config, err error) {
 		linecomment,
 		multcomment,
 		fmtdatetime,
+		int(controlport),
 		int(connmaxopen),
 		int(connmaxidel),
 	}
