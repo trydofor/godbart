@@ -3,6 +3,7 @@ package art
 import (
 	"fmt"
 	"io/ioutil"
+	"strings"
 	"testing"
 	"time"
 )
@@ -15,20 +16,36 @@ func Test_Ctrl_Sync(t *testing.T) {
 	CtrlRoom.Open(59062, "tree")
 }
 
-func testWalk(exe *Exe) {
+func testJob(h, v int, s string) {
+	idt := strings.Repeat("| ", v)
+	fmt.Printf("%s<==%d, lvl=%d, at=%s\n", idt, h, v, s)
+	CtrlRoom.dealJobx(nil, h)
+}
+
+func mockExe(exe *Exe, lvl int) {
 
 	head := exe.Seg.Head
+	jobx := true
 	defer func() {
-		CtrlRoom.dealJobx(nil, head)
+		if jobx {
+			testJob(head, lvl, "deref")
+		}
 	}()
 
 	time.Sleep(time.Second * 3)
-	fmt.Printf("id=%d, sleep 3 seconds\n", head)
-	for _, v := range exe.Sons {
-		// 都是三条记录
-		testWalk(v)
-		testWalk(v)
-		testWalk(v)
+	idt := strings.Repeat("| ", lvl)
+	if len(exe.Sons) > 0 {
+		for i := 0; i < 2; i++ {
+			jobx = true
+			fmt.Printf("%sid=%d, lvl=%d, select=%d\n", idt, head, lvl, i+1)
+			for _, v := range exe.Sons {
+				mockExe(v, lvl+1)
+			}
+			jobx = false
+			testJob(head, lvl, "for")
+		}
+	} else {
+		fmt.Printf("%sid=%d, lvl=%d, update\n", idt, head, lvl)
 	}
 }
 
@@ -56,7 +73,7 @@ func Test_Ctrl_Mock(t *testing.T) {
 	}
 	for {
 		for _, v := range sqlx.Exes {
-			testWalk(v)
+			mockExe(v, 1)
 		}
 	}
 }

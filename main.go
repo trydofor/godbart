@@ -189,7 +189,7 @@ func main() {
 	app := cli.NewApp()
 
 	app.Author = "github.com/trydofor"
-	app.Version = "0.9.2"
+	app.Version = "0.9.3"
 	app.Compiled = time.Now()
 
 	app.Name = "godbart"

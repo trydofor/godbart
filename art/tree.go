@@ -140,8 +140,11 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 	head := exe.Seg.Head
 	line := exe.Seg.Line
 
+	jobx := true // 保证执行
 	defer func() {
-		CtrlRoom.dealJobx(nil, head)
+		if jobx {
+			CtrlRoom.dealJobx(nil, head)
+		}
 	}()
 
 	log.Printf("[TRACE] ready to run, line=%s, stmt=%#v\n", line, stmt)
@@ -162,6 +165,7 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 			cnt := 0
 			for row.Next() {
 				cnt++
+				jobx = true
 				log.Printf("[TRACE] processing %d-th row, line=%s\n", cnt, line)
 				row.Scan(ptrs...)
 
@@ -235,6 +239,10 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 						return er
 					}
 				}
+
+				// 每个记录一棵树
+				jobx = false
+				CtrlRoom.dealJobx(nil, head)
 			}
 
 			// 有记录时，遍历END子树
@@ -297,6 +305,7 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 			}
 		}
 	}
+
 	log.Printf("[TRACE] accomplished stmt, line=%s\n\n", line)
 	return nil
 }

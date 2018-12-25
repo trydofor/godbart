@@ -63,6 +63,10 @@ type CtrlJob struct {
 	time string // 提交时间
 }
 
+func (j *CtrlJob) String() string {
+	return fmt.Sprintf("{id=%d, cmnd=%q, user=%s, time=%s}", j.id, j.cmnd, j.user, j.time)
+}
+
 type Room struct {
 	pid  int         // 进程ID
 	port int         // 服务端口
@@ -116,7 +120,7 @@ func (room *Room) Open(port int, name string) {
 		es := err.Error()
 		if strings.Contains(es, "address already in use") {
 			info := askInfo(ntw)
-			es = fmt.Sprintf("an instant is runing info=%s", info)
+			es = fmt.Sprintf("an instant is running info=%s", info)
 		}
 		log.Fatalf("[ERROR] %s\n", es)
 		os.Exit(CtrlExitcd)
@@ -164,14 +168,14 @@ func (room *Room) infoByte(user string) []byte {
 
 func (room *Room) putJob(cmnd, user string) {
 	id := atomic.AddInt64(&room.jbid, 1)
-	dt := time.Now().Format("2006-01-02 15:04:05")
+	dt := time.Now().Format("15:04:05")
 	jb := &CtrlJob{id, cmnd, user, dt}
 	room.jobs.Store(id, jb)
-	room.echo <- fmt.Sprintf("job=%#v applied", jb)
-	log.Printf("[TRACE] job=%#v applied", jb)
+	room.echo <- fmt.Sprintf("job=%v applied", jb)
+	log.Printf("[TRACE] job=%v applied", jb)
 }
 
-func (room *Room) delJob(user string, id int64) {
+func (room *Room) delJob(user string, id int) {
 	if id < 0 {
 		room.jobs.Range(func(k, v interface{}) bool {
 			room.jobs.Delete(k)
@@ -230,10 +234,14 @@ func (room *Room) dealConn(conn net.Conn) {
 		case roomBaseInfo:
 			conn.Write(room.infoByte(user))
 		case roomBaseKill:
-			jbid, er := strconv.ParseInt(part[1], 10, 32)
-			if er != nil {
-				conn.Write([]byte(fmt.Sprintf("bad job id %s, err=%s", line, er.Error())));
-				continue
+			jbid := -1
+			if len(part) > 1 {
+				id, er := strconv.ParseInt(part[1], 10, 32)
+				if er != nil {
+					conn.Write([]byte(fmt.Sprintf("bad job id %s, err=%s", line, er.Error())));
+					continue
+				}
+				jbid = int(id)
 			}
 			room.delJob(user, jbid)
 		case roomBasePass:
@@ -262,7 +270,7 @@ func (room *Room) dealConn(conn net.Conn) {
 			}
 
 			if fd == 1 {
-				job := &CtrlJob{-1, line, user, time.Now().Format("2006-01-02 15:04:05")}
+				job := &CtrlJob{-1, line, user, time.Now().Format("15:04:05")}
 				room.dealJobx(job)
 			} else if fd == 2 {
 				room.putJob(line, user)
@@ -381,19 +389,19 @@ func (room *Room) dealJobx(job *CtrlJob, args ... interface{}) {
 			headRun = args[0].(int)
 		}
 
-		log.Printf("[TRACE] current id=%d, job=%#v\n", headRun, job)
-		room.echo <- fmt.Sprintf("current id=%d, job=%#v\n", headRun, job)
+		log.Printf("[TRACE] at=%d, job=%v\n", headRun, job)
+		room.echo <- fmt.Sprintf("at=%d, job=%v\n", headRun, job)
 
 		if strings.HasSuffix(part[0], roomTreeStop) {
 			if headArg < 0 {
 				log.Printf("[TRACE] exited by %s\n", job.cmnd)
-				room.echo <- fmt.Sprintf("exited by %s\n", job.cmnd)
+				room.echo <- fmt.Sprintf("exited in 5 seconds, by %s\n", job.cmnd)
 				time.Sleep(time.Second * 5)
 				os.Exit(CtrlExitcd)
 			} else {
 				if headRun == headArg {
 					log.Printf("[TRACE] exited by %s\n", job.cmnd)
-					room.echo <- fmt.Sprintf("exited by %s\n", job.cmnd)
+					room.echo <- fmt.Sprintf("exited in 5 seconds, by %s\n", job.cmnd)
 					time.Sleep(time.Second * 5)
 					os.Exit(CtrlExitcd)
 				} else {

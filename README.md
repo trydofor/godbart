@@ -253,6 +253,23 @@ REPLACE INTO sys_hot_separation(table_name, checked_id, checked_tm) VALUES
  * wait - 执行等待，kill可继续。长时间停止可能导致数据库连接超时。
    - wait 在当前树完成时等待。
    - wait N 在id=N的树时停止，N<0时等效于stop。
+   
+```bash
+# 连接控制端口，非127.0.0.* 登录，需要先输入密码
+telnet 127.0.0.1 59062
+# 以下为连接成功输入的命令。
+
+# 查看运行信息
+info
+# 查看当前执行`数据树`结构
+tree
+# 空等待，显示每个执行节点信息。
+wait 0
+# 清理掉所有任务
+kill
+# 优雅停止在一棵树的结束
+stop
+```
 
 ## 2. 指令变量
 
@@ -623,16 +640,16 @@ cat /tmp/tree-main-2018-all.sql \
 ## 4. 不想理你的问题
 
 * Q01：使用中发现了问题，出现了BUG怎么办？
-  -[x] 有能力hack code的，就提交PR。
-  -[x] 没能力的，提交 issue。
-  -[x] 再不行的，就认命吧。
+  - 有能力hack code的，就提交PR。
+  - 没能力的，提交 issue。
+  - 再不行的，就认命吧。
 
 * Q02：我SQL写错了，习惯性输入了`--agree`，结果数据丢了 :(
-  -[x] 事后没有后悔药，不要轻易 agree。
-  -[x] 执行前要确认，要两人确认，想好fallback计划。
-  -[x] 一定写where false的条件安全SQL。
-  -[x] 甚至写替换前语法错误的SQL。
+  - 事后没有后悔药，不要轻易 agree。
+  - 执行前要确认，要两人确认，想好fallback计划。
+  - 一定写where false的条件安全SQL。
+  - 甚至写替换前语法错误的SQL。
 
 * Q03：`FOR`中只有`HAS`和`NOT`，会增加`>`,`<`或其他运算符？
-  -[x] 复杂的条件判断，可以由SQL语句产生，然后`REF`。
-  -[x] 写那么复杂的SQL，不如去编程好了。
+  - 复杂的条件判断，可以由SQL语句产生，然后`REF`。
+  - 写那么复杂的SQL，不如去编程好了。
