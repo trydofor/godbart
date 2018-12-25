@@ -12,7 +12,7 @@ import (
 func Test_MyConn(t *testing.T) {
 
 	conn := MyConn{}
-	panicIfErr(conn.Open(pref, ddst))
+	panicIfErr(conn.Open(pref, dsrc))
 
 	fmt.Println("database: " + conn.DbName())
 	tables, err := conn.Tables()

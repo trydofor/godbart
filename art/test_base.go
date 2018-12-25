@@ -9,6 +9,7 @@ var (
 	dsrc = &DataSource{"prd_main", "trydofor:moilioncircle@tcp(127.0.0.1:3306)/godbart_prd_main"}
 	ddst = &DataSource{"prd_2018", "trydofor:moilioncircle@tcp(127.0.0.1:3306)/godbart_prd_2018"}
 	dsts = []*DataSource{dsrc, ddst}
+	dstt = []*DataSource{ddst}
 	mask = "[0-9]{10,}"
 )
 

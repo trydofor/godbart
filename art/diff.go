@@ -9,9 +9,9 @@ import (
 )
 
 const (
-	TbName = "tbname" // 分别对比`-s`和多个`-d` 间的表名差异
-	Detail = "detail" // 分别对比`-s`和多个`-d` 间的表明细(column, index,trigger)
-	Create = "create" // 生成多库的创建DDL(table&index，trigger)
+	DiffTbl = "tbl" // 分别对比`-s`和多个`-d` 间的表名差异
+	DiffAll = "all" // 分别对比`-s`和多个`-d` 间的表明细(column, index,trigger)
+	DiffDdl = "ddl" // 生成多库的创建DDL(table&index，trigger)
 )
 
 type DiffItem struct {
@@ -20,11 +20,11 @@ type DiffItem struct {
 	Triggers map[string]Trg
 }
 
-var DiffKinds = []string{TbName, Detail, Create}
+var DiffKind = []string{DiffTbl, DiffAll, DiffDdl}
 
 func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regexp) error {
 
-	if kind == Create {
+	if kind == DiffDdl {
 		dbs := make([]*DataSource, 0, len(dest)+1)
 		dbs = append(dbs, srce)
 		dbs = append(dbs, dest...)
@@ -67,7 +67,7 @@ func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, r
 		return err
 	}
 
-	detail := kind == Detail
+	detail := kind == DiffAll
 	sdtl := make(map[string]DiffItem)
 
 	for _, con := range dcon {
@@ -95,7 +95,7 @@ func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, r
 		}
 
 		for _, tbl := range dtbl {
-			if sset[tbl] {
+			if !sset[tbl] {
 				if ch {
 					ch = false
 					rep.WriteString(head)
@@ -480,7 +480,8 @@ func showCreate(pref *Preference, conn *MyConn, rgx []*regexp.Regexp) {
 		if e != nil {
 			log.Fatalf("[ERROR] db=%s, failed to dll table=%s\n", conn.DbName(), v)
 		} else {
-			fmt.Printf("\n%s db=%s, %d/%d, table=%s\n%s", pref.LineComment, conn.DbName(), i+1, c, v, tb)
+			ddl := fmt.Sprintf("DROP TABLE IF EXISTS `%s`%s\n%s%s\n", v, pref.DelimiterRaw, tb, pref.DelimiterRaw)
+			fmt.Printf("\n%s db=%s, %d/%d, table=%s\n%s", pref.LineComment, conn.DbName(), i+1, c, v, ddl)
 		}
 
 		tgs, e := conn.Triggers(v)
@@ -492,7 +493,8 @@ func showCreate(pref *Preference, conn *MyConn, rgx []*regexp.Regexp) {
 				if r != nil {
 					log.Fatalf("[ERROR] db=%s, failed to ddl trigger=%s, table=%s\n", conn.DbName(), g.Name, v)
 				} else {
-					fmt.Printf("\n%s db=%s, trigger=%s, table=%s\n%s", pref.LineComment, conn.DbName(), g.Name, v, tg)
+					ddl := fmt.Sprintf("DROP TRIGGER IF EXISTS `%s` %s\n%s $$\n%s $$\n%s %s\n", g.Name, pref.DelimiterRaw, pref.DelimiterCmd, tg, pref.DelimiterCmd, pref.DelimiterRaw)
+					fmt.Printf("\n%s db=%s, trigger=%s, table=%s\n%s", pref.LineComment, conn.DbName(), g.Name, v, ddl)
 				}
 			}
 		}

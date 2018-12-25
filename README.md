@@ -142,23 +142,48 @@ REPLACE INTO sys_schema_version (version, created) VALUES( 2018022801, NOW());
  -c godbart.toml \
  -s prd_main \
  -d prd_2018 \
- -k detail \
+ -k all \
  'tx_.*' \
 | tee main-2018-diff-out.log
 ```
 
  * `-s` 左侧比较相，可以零或一。
  * `-d` 右侧比较相，可以零或多。
- * `-k` 比较类型，支持以下三种，默认`tbname`。
-    - `create` 生成多库的创建DDL(table&index，trigger)
-    - `detail` 分别对比`-s`和多个`-d` 间的表明细(column, index, trigger)
-    - `tbname` 分别对比`-s`和多个`-d` 间的表名差异
- * `--agree` 选填，风险自负，真正执行。
+ * `-k` 比较类型，支持以下三种，默认`tbl`。
+    - `ddl` 生成多库的创建DDL(table&index，trigger)
+    - `all` 分别对比`-s`和多个`-d` 间的表明细(column, index, trigger)
+    - `tbl` 分别对比`-s`和多个`-d` 间的表名差异
 
 参数为需要对比的表的名字的正则表达式。如果参数为空，表示所有表。
 `-s`和`-d`，必须指定一个。只有一个时，仅打印该库，多个时才进行比较。
 
-### 1.4. 数据迁移 Tree
+### 1.4. 结构同步 Sync
+
+同步多库间的表结构，目前只支持空表创建。此场景一般出现在初始化一个新数据库的时候。
+因为数据库版本管理不会造成很大差异，如果存在差异，且有数据的情况下，人工介入更好。
+
+注意，对于DBA，可以使用`mysqldump -d`来导出表结构。
+
+```bash
+./godbart sync \
+ -c godbart.toml \
+ -s prd_main \
+ -d prd_2018 \
+ -k all \
+ 'tx_.*'
+```
+
+ * `-s` 左侧比较相，可以零或一。
+ * `-d` 右侧比较相，可以一或多。
+ * `-k` 创建类型，支持以下三种，默认`tbl`。
+    - `tbl` 只创建表和索引
+    - `trg` 只创建trigger
+    - `all` 完全创建(column, index, trigger)
+ * `--agree` 选填，风险自负，真正执行。
+
+参数为需要对比的表的名字的正则表达式。如果参数为空，表示所有表。
+
+### 1.5. 数据迁移 Tree
 
 不建议一次转移大量数据，有概率碰到网络超时或内存紧张。
 
@@ -227,7 +252,7 @@ REPLACE INTO sys_hot_separation(table_name, checked_id, checked_tm) VALUES
 ('tx_parcel', 990002, now());
 ```
 
-### 1.5. 控制端口
+### 1.6. 控制端口
 
 对于长时间执行的命令，支持单例和运行时控制（如优雅停止），因此增加了`控制端口`功能。
 其监听TCP端口（建议1024以上），当端口号≤0时，表示忽略此功能。
@@ -533,22 +558,36 @@ sed -i 's/:3306)/:13306)/g' godbart.toml
  demo/sql/revi/
 ```
 
-### 3.6. Diff 结构差异
+### 3.7. Sync 结构同步
+
+复制prd_main表结构到dev_main
+
+```bash
+./godbart sync \
+ -c godbart.toml \
+ -s prd_main \
+ -d dev_main \
+ -k all \
+ --agree
+```
+
+### 3.7. Diff 结构差异
 
 使用 diff 执行比较 prd_main 与 prd_2018, dev_main 差异。
 
 ```bash
-# 查看 prd_main 与 dev_main的表名差异（默认）
+# 查看 prd_main 与 dev_main的表名差异，sync后完全一致
 ./godbart diff \
  -c godbart.toml \
  -s prd_main \
- -d dev_main
+ -d dev_main \
+ -k all
  
 # 显示 tx_parcel表在prd_main上的创建语句
 ./godbart diff \
  -c godbart.toml \
  -s prd_main \
- -k create \
+ -k ddl \
   tx_parcel \
 | tee /tmp/ddl-tx_parcel-main.sql
 
@@ -557,12 +596,12 @@ sed -i 's/:3306)/:13306)/g' godbart.toml
  -c godbart.toml \
  -s prd_main \
  -d prd_2018 \
- -k detail \
+ -k all \
   tx_parcel \
 | tee /tmp/diff-tx_parcel-main-2018.sql
 ```
 
-### 3.7. SqlX 静态分析
+### 3.8. SqlX 静态分析
 
 静态分析 DataTree结构。
 
@@ -574,7 +613,7 @@ sed -i 's/:3306)/:13306)/g' godbart.toml
  | tee /tmp/sqlx-tree.log
 ```
 
-### 3.8. Tree 保存JSON
+### 3.9. Tree 保存JSON
 
 把数据，保持成TSV（TAB分割），CSV（逗号分割）和JSON。
 此例中，有`脱引号`，`模式展开` 的组合。
@@ -594,7 +633,7 @@ cat /tmp/tree-main-json.log \
 | sed -E 's/^-- |;$//g' \
 | tee /tmp/tree-main-json.txt
 ```
-### 3.9. Tree 迁移数据
+### 3.10. Tree 迁移数据
 
 此例中，因为危险操作比较多，务必先分离脚本，人工确认。
 脚本99%可以执行，在二进制或转义字符转换字面量可能有遗漏。

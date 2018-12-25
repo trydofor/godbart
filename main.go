@@ -83,10 +83,10 @@ func checkEnvs(ctx *cli.Context) map[string]string {
 	return envs
 }
 
-func checkKind(ctx *cli.Context) string {
+func checkKind(ctx *cli.Context, knd []string, dft string) string {
 	flag := ctx.String("k")
-	kind, ok := art.TbName, false
-	for _, v := range art.DiffKinds {
+	kind, ok := dft, false
+	for _, v := range knd {
 		if strings.EqualFold(flag, v) {
 			kind = v
 			ok = true
@@ -139,9 +139,18 @@ func diff(ctx *cli.Context) error {
 	conf := checkConf(ctx)
 	dest := checkDest(ctx, conf, false)
 	srce := checkSrce(ctx, conf, false)
-	kind := checkKind(ctx)
+	kind := checkKind(ctx, art.DiffKind, art.DiffTbl)
 	tbls := checkRegx(ctx)
 	return art.Diff(&conf.Preference, srce, dest, kind, tbls)
+}
+
+func sync(ctx *cli.Context) error {
+	conf := checkConf(ctx)
+	dest := checkDest(ctx, conf, false)
+	srce := checkSrce(ctx, conf, false)
+	kind := checkKind(ctx, art.SyncKind, art.SyncTbl)
+	tbls := checkRegx(ctx)
+	return art.Sync(srce, dest, kind, tbls)
 }
 
 func tree(ctx *cli.Context) error {
@@ -189,7 +198,7 @@ func main() {
 	app := cli.NewApp()
 
 	app.Author = "github.com/trydofor"
-	app.Version = "0.9.3"
+	app.Version = "0.9.4"
 	app.Compiled = time.Now()
 
 	app.Name = "godbart"
@@ -218,10 +227,16 @@ func main() {
 		Usage: "the (E)nvironment. eg. \"-e MY_DATE='2015-11-18 12:34:56'\"",
 	}
 
-	kindFlag := &cli.StringFlag{
+	difkFlag := &cli.StringFlag{
 		Name:  "k",
-		Usage: "the (K)ind to diff [detail|create|tbname]. detail:table details (column, index, trigger). create:show create ddl (table, trigger). tbname:only table's name.",
-		Value: "tbname",
+		Usage: "the (K)ind to diff [all|tbl|ddl]. all:column, index, trigger. ddl:show ddl (table, trigger). tbl: table name.",
+		Value: "tbl",
+	}
+
+	synkFlag := &cli.StringFlag{
+		Name:  "k",
+		Usage: "the (K)ind to sync [all|tbl|trg]. all:column, index, trigger. trg:trigger. tbl:table,index",
+		Value: "tbl",
 	}
 
 	maskFlag := &cli.StringFlag{
@@ -293,9 +308,22 @@ func main() {
 				confFlag,
 				srceFlag,
 				destFlag,
-				kindFlag,
+				difkFlag,
 			},
 			Action: diff,
+		},
+		{
+			Name:      "sync",
+			Usage:     "create table d.A like s.B",
+			ArgsUsage: "tables to create (regexp/i). empty means all",
+			Flags: []cli.Flag{
+				confFlag,
+				srceFlag,
+				destFlag,
+				synkFlag,
+				riskFlag,
+			},
+			Action: sync,
 		},
 		{
 			Name:      "tree",

@@ -182,13 +182,12 @@ WHERE
 func (m *MyConn) DdlTable(table string) (string, error) {
 	var ddl string
 	var sn = func(rs *sql.Rows) (er error) {
-		var nm, dl string
+		var nm string
 		if rs.Next() {
-			if er = rs.Scan(&nm, &dl); er != nil {
+			if er = rs.Scan(&nm, &ddl); er != nil {
 				return
 			}
 		}
-		ddl = fmt.Sprintf("DROP TABLE IF EXISTS `%s`%s\n%s%s\n", table, m.Pref.DelimiterRaw, dl, m.Pref.DelimiterRaw)
 		return
 	}
 
@@ -213,13 +212,11 @@ func (m *MyConn) DdlTrigger(trigger string) (string, error) {
 		}
 		i1 := strings.Index(col[2], "DEFINER")
 		i2 := strings.Index(col[2], "TRIGGER")
-		var dl string
 		if i1 > 0 && i1 < i2 {
-			dl = col[2][:i1] + col[2][i2:]
+			ddl = col[2][:i1] + col[2][i2:]
 		} else {
-			dl = col[2]
+			ddl = col[2]
 		}
-		ddl = fmt.Sprintf("DROP TRIGGER IF EXISTS `%s` %s\n%s $$\n%s $$\n%s %s\n", trigger, m.Pref.DelimiterRaw, m.Pref.DelimiterCmd, dl, m.Pref.DelimiterCmd, m.Pref.DelimiterRaw)
 		return
 	}
 
