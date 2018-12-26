@@ -2,12 +2,6 @@ package art
 
 import "database/sql"
 
-const (
-	SqlNull  = "NULL"
-	SqlTrue  = "TRUE"
-	SqlFalse = "FALSE"
-)
-
 type Trg struct {
 	Name      string
 	Timing    string

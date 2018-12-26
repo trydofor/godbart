@@ -1,7 +1,6 @@
 package art
 
 import (
-	"fmt"
 	"io/ioutil"
 	"strings"
 	"testing"
@@ -9,16 +8,16 @@ import (
 )
 
 func Test_MakePass(t *testing.T) {
-	fmt.Println(makePass())
+	OutTrace(makePass())
 }
 
 func Test_Ctrl_Sync(t *testing.T) {
-	CtrlRoom.Open(59062, "tree")
+	CtrlRoom.Open(59062, CtrlRoomTree)
 }
 
 func testJob(h, v int, s string) {
 	idt := strings.Repeat("| ", v)
-	fmt.Printf("%s<==%d, lvl=%d, at=%s\n", idt, h, v, s)
+	OutTrace("%s<==%d, lvl=%d, at=%s", idt, h, v, s)
 	CtrlRoom.dealJobx(nil, h)
 }
 
@@ -37,7 +36,7 @@ func mockExe(exe *Exe, lvl int) {
 	if len(exe.Sons) > 0 {
 		for i := 0; i < 2; i++ {
 			jobx = true
-			fmt.Printf("%sid=%d, lvl=%d, select=%d\n", idt, head, lvl, i+1)
+			OutTrace("%sid=%d, lvl=%d, select=%d", idt, head, lvl, i+1)
 			for _, v := range exe.Sons {
 				mockExe(v, lvl+1)
 			}
@@ -45,12 +44,12 @@ func mockExe(exe *Exe, lvl int) {
 			testJob(head, lvl, "for")
 		}
 	} else {
-		fmt.Printf("%sid=%d, lvl=%d, update\n", idt, head, lvl)
+		OutTrace("%sid=%d, lvl=%d, update", idt, head, lvl)
 	}
 }
 
 func Test_Ctrl_Mock(t *testing.T) {
-	go CtrlRoom.Open(59062, "tree")
+	go CtrlRoom.Open(59062, CtrlRoomTree)
 
 	file := "../demo/sql/tree/tree.sql"
 	//file := "../demo/sql/init/1.table.sql"
@@ -69,7 +68,7 @@ func Test_Ctrl_Mock(t *testing.T) {
 
 	CtrlRoom.putEnv(roomTreeEnvSqlx, sqlx)
 	for _, e := range sqlx.Exes {
-		fmt.Println(e.Tree())
+		OutTrace(e.Tree())
 	}
 	for {
 		for _, v := range sqlx.Exes {

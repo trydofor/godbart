@@ -142,12 +142,12 @@ REPLACE INTO sys_schema_version (version, created) VALUES( 2018022801, NOW());
  -c godbart.toml \
  -s prd_main \
  -d prd_2018 \
- -k all \
+ -t all \
  'tx_.*' \
 | tee main-2018-diff-out.log
 ```
 
- * `-s` 左侧比较相，可以零或一。
+ * `-s` 左侧比较相，必须指定。
  * `-d` 右侧比较相，可以零或多。
  * `-k` 比较类型，支持以下三种，默认`tbl`。
     - `ddl` 生成多库的创建DDL(table&index，trigger)
@@ -155,7 +155,7 @@ REPLACE INTO sys_schema_version (version, created) VALUES( 2018022801, NOW());
     - `tbl` 分别对比`-s`和多个`-d` 间的表名差异
 
 参数为需要对比的表的名字的正则表达式。如果参数为空，表示所有表。
-`-s`和`-d`，必须指定一个。只有一个时，仅打印该库，多个时才进行比较。
+只有一个库时，仅打印该库，多个时才进行比较。
 
 ### 1.4. 结构同步 Sync
 
@@ -169,7 +169,7 @@ REPLACE INTO sys_schema_version (version, created) VALUES( 2018022801, NOW());
  -c godbart.toml \
  -s prd_main \
  -d prd_2018 \
- -k all \
+ -t all \
  'tx_.*'
 ```
 
@@ -234,6 +234,9 @@ CREATE TABLE `sys_hot_separation` (
 注意：`FOR`时强关系，`REF`是弱关系，两者的关联和区别，见后面章节。
 
 ```mysql
+-- 不存在则增加默认值
+INSERT IGNORE sys_hot_separation VALUES ('tx_parcel',0,now());
+
 -- REF checked_id 990001  #数据树根节点
 SELECT checked_id FROM sys_hot_separation WHERE table_name = 'tx_parcel';
 
@@ -248,8 +251,7 @@ SELECT * FROM tx_track WHERE track_num = 'TRK0001';
 SELECT * FROM tx_parcel_event WHERE parcel_id = 990002;
 
 -- RUN FOR 990002 #每棵990002树节点完成时，执行此语句
-REPLACE INTO sys_hot_separation(table_name, checked_id, checked_tm) VALUES 
-('tx_parcel', 990002, now());
+REPLACE INTO sys_hot_separation VALUES ('tx_parcel', 990002, now());
 ```
 
 ### 1.6. 控制端口
@@ -567,7 +569,7 @@ sed -i 's/:3306)/:13306)/g' godbart.toml
  -c godbart.toml \
  -s prd_main \
  -d dev_main \
- -k all \
+ -t all \
  --agree
 ```
 
@@ -581,13 +583,13 @@ sed -i 's/:3306)/:13306)/g' godbart.toml
  -c godbart.toml \
  -s prd_main \
  -d dev_main \
- -k all
+ -t all
  
 # 显示 tx_parcel表在prd_main上的创建语句
 ./godbart diff \
  -c godbart.toml \
  -s prd_main \
- -k ddl \
+ -t ddl \
   tx_parcel \
 | tee /tmp/ddl-tx_parcel-main.sql
 
@@ -596,7 +598,7 @@ sed -i 's/:3306)/:13306)/g' godbart.toml
  -c godbart.toml \
  -s prd_main \
  -d prd_2018 \
- -k all \
+ -t all \
   tx_parcel \
 | tee /tmp/diff-tx_parcel-main-2018.sql
 ```

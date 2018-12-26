@@ -2,7 +2,6 @@ package art
 
 import (
 	"fmt"
-	"log"
 	"regexp"
 	"sort"
 	"strings"
@@ -69,7 +68,7 @@ type Hld struct {
 }
 
 func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
-	log.Printf("[TRACE] build a SqlX\n")
+	logDebug("build a SQLX")
 
 	// 除了静态环境变量，都是运行时确定的。
 	holdExe := make(map[string]*Exe)   // hold出生的Exe
@@ -108,7 +107,7 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 			for _, gx := range ags {
 				lineArg[seg.Line] = append(lineArg[seg.Line], gx)
 				// 定义指令，检测重复
-				log.Printf("[TRACE]   parsed Arg=%#v\n", gx)
+				logDebug("parsed Arg=%#v", gx)
 				if gx.Type == CmndEnv || gx.Type == CmndRef || gx.Type == CmndStr {
 					od, ok := argx[gx.Hold]
 					if ok {
@@ -124,7 +123,7 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 		exe := &Exe{}
 		exe.Seg = seg
 
-		log.Printf("[TRACE] build an Exe, line=%s, file=%s\n", seg.Line, seg.File)
+		logDebug("build an Exe, line=%s, file=%s", seg.Line, seg.File)
 
 		// 挂靠
 		if iarg >= 0 { //有注释的
@@ -140,16 +139,16 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 									return nil, errorAndLog("ENV not found. para=%s, line=%d, file=%s", gx.Para, gx.Head, seg.File)
 								} else {
 									envx[gx.Hold] = ""
-									log.Printf("[TRACE]   checked def ENV, set Empty, Arg's line=%d, para=%s\n", gx.Head, gx.Para)
+									logDebug("checked def ENV, set Empty, Arg's line=%d, para=%s", gx.Head, gx.Para)
 								}
 							} else {
 								envx[gx.Hold] = ev
-								log.Printf("[TRACE]   checked def ENV, Arg's line=%d, para=%s, env=%s\n", gx.Head, gx.Para, ev)
+								logDebug("checked def ENV, Arg's line=%d, para=%s, env=%s", gx.Head, gx.Para, ev)
 							}
 						case CmndRef:
 							defs[gx.Hold] = gx.Para
 							holdExe[gx.Hold] = exe
-							log.Printf("[TRACE]   appended Exe's REF, Arg's line=%d, para=%s, hold=%s\n", gx.Head, gx.Para, gx.Hold)
+							logDebug("appended Exe's REF, Arg's line=%d, para=%s, hold=%s", gx.Head, gx.Para, gx.Hold)
 						case CmndStr:
 							holdStr[gx.Hold] = true
 							hd := gx.Para
@@ -163,23 +162,23 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 							if rg == nil { // 直接定义
 								if ev, kx := envs[gx.Para]; kx { //ENV
 									envx[gx.Hold] = ev
-									log.Printf("[TRACE]   checked STR def ENV, Arg's line=%d, para=%s, env=%s\n", gx.Head, gx.Para, ev)
+									logDebug("checked STR def ENV, Arg's line=%d, para=%s, env=%s", gx.Head, gx.Para, ev)
 								} else { // REF
 									holdExe[gx.Hold] = exe
 									defs[gx.Hold] = gx.Para
-									log.Printf("[TRACE]   appended Exe's STR def REF, Arg's line=%d, hold=%s\n", gx.Head, gx.Hold)
+									logDebug("appended Exe's STR def REF, Arg's line=%d, hold=%s", gx.Head, gx.Hold)
 								}
 							} else { // 重新定义
 								if rg.Type == CmndEnv { // 重定义的ENV
 									if ev, kx := envs[rg.Para]; kx {
 										envx[gx.Hold] = ev
-										log.Printf("[TRACE]   checked STR redef ENV, Arg's line=%d, para=%s, env=%s\n", gx.Head, rg.Para, ev)
+										logDebug("checked STR redef ENV, Arg's line=%d, para=%s, env=%s", gx.Head, rg.Para, ev)
 									} else {
 										if rule == EnvRuleError {
 											return nil, errorAndLog("STR redefine ENV not found. para=%s, line=%d, file=%s", gx.Para, gx.Head, seg.File)
 										} else {
 											envx[rg.Para] = ""
-											log.Printf("[TRACE]   checked STR redefine ENV, set Empty, Arg's line=%d, para=%s\n", gx.Head, gx.Para)
+											logDebug("checked STR redefine ENV, set Empty, Arg's line=%d, para=%s", gx.Head, gx.Para)
 										}
 
 									}
@@ -189,7 +188,7 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 										tx := &Arg{gx.Line, gx.Head, gx.Type, rg.Para, gx.Hold}
 										argx[gx.Hold] = tx
 										ex.Defs[gx.Hold] = rg.Para
-										log.Printf("[TRACE]   appended Exe's STR redef REF, From=%d, To=%d, para=%s\n", gx.Head, rg.Head, rg.Para)
+										logDebug("appended Exe's STR redef REF, From=%d, To=%d, para=%s", gx.Head, rg.Head, rg.Para)
 									} else {
 										return nil, errorAndLog("STR redefine REF not found. para=%s, line=%d, file=%s", gx.Para, gx.Head, seg.File)
 									}
@@ -197,7 +196,7 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 							}
 						case CmndRun, CmndOut:
 							exe.Acts = append(exe.Acts, gx)
-							log.Printf("[TRACE]   appended Exe's %s, Arg's line=%d, hold=%s\n", gx.Type, gx.Head, gx.Hold)
+							logDebug("appended Exe's %s, Arg's line=%d, hold=%s", gx.Type, gx.Head, gx.Hold)
 						}
 					}
 				}
@@ -236,7 +235,7 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 		for _, v := range exe.Acts {
 			if pa, ok := holdExe[v.Hold]; ok {
 				sonFunc(pa, exe, &top)
-				log.Printf("[TRACE] find %s parent, hold=%s, parent=%s, child=%s\n", v.Type, v.Hold, pa.Seg.Line, exe.Seg.Line)
+				logDebug("find %s parent, hold=%s, parent=%s, child=%s", v.Type, v.Hold, pa.Seg.Line, exe.Seg.Line)
 				continue
 			}
 
@@ -252,7 +251,7 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 				pa, ok := holdExe[v.Str]
 				if ok { // REF|STR HOLD
 					sonFunc(pa, exe, &top)
-					log.Printf("[TRACE] find DEP parent, hold=%s, parent=%s, child=%s\n", v.Str, pa.Seg.Line, exe.Seg.Line)
+					logDebug("find DEP parent, hold=%s, parent=%s, child=%s", v.Str, pa.Seg.Line, exe.Seg.Line)
 				}
 			}
 		}
@@ -271,7 +270,7 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 		}
 
 		alls = append(alls, exe)
-		log.Printf("[TRACE] done an Exe, line=%s, file=%s\n\n", seg.Line, seg.File)
+		LogTrace("built an Exe, line=%s, file=%s", seg.Line, seg.File)
 	}
 
 	// 清理无用REF
@@ -282,7 +281,7 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 
 		if exe, ok := holdExe[hd]; ok {
 			delete(exe.Defs, hd)
-			log.Printf("[TRACE] remove unused REF|STR, arg=%#v\n", argx[hd])
+			LogTrace("remove unused REF|STR, arg=%#v", argx[hd])
 		}
 	}
 
@@ -320,11 +319,11 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 		}
 
 		if rs {
-			log.Printf("[TRACE] resort Sons, line=%s\n", alls[i].Seg.Line)
+			logDebug("resort Sons, line=%s", alls[i].Seg.Line)
 		}
 	}
 
-	log.Printf("[TRACE] done SQLX\n\n")
+	LogTrace("built a SQLX")
 
 	sqlx := &SqlExe{envx, tops}
 	return sqlx, nil

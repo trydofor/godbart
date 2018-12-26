@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/trydofor/godbart/art"
 	"github.com/urfave/cli"
 	"io/ioutil"
@@ -14,7 +13,7 @@ import (
 
 func checkConf(ctx *cli.Context) *art.Config {
 	file := ctx.String("c")
-	log.Printf("[TRACE] got conf=%s\n", file)
+	art.LogTrace("got conf=%s", file)
 
 	data, err := ioutil.ReadFile(file)
 	art.ExitIfError(err, -1, "can read config=%s", file)
@@ -25,6 +24,21 @@ func checkConf(ctx *cli.Context) *art.Config {
 	return conf
 }
 
+func checkMlvl(ctx *cli.Context) {
+	lvl := ctx.String("l")
+	art.LogTrace("got level=%s", lvl)
+	switch strings.ToLower(lvl) {
+	case "debug":
+		art.MsgLevel = art.LvlDebug
+	case "trace":
+		art.MsgLevel = art.LvlTrace
+	case "error":
+		art.MsgLevel = art.LvlError
+	default:
+		art.MsgLevel = art.LvlDebug
+	}
+}
+
 func checkDest(ctx *cli.Context, cnf *art.Config, req bool) []*art.DataSource {
 	flag := ctx.StringSlice("d")
 	art.ExitIfTrue(req && len(flag) == 0, -2, "no dest db selected")
@@ -33,7 +47,7 @@ func checkDest(ctx *cli.Context, cnf *art.Config, req bool) []*art.DataSource {
 	for i := 0; i < len(flag); i++ {
 		d, ok := cnf.DataSource[flag[i]]
 		art.ExitIfTrue(!ok, -2, "db not found, dest=%s", flag[i])
-		log.Printf("[TRACE] got dest db=%s\n", flag[i])
+		art.LogTrace("got dest db=%s", flag[i])
 		dest[i] = &d
 	}
 
@@ -46,7 +60,7 @@ func checkSrce(ctx *cli.Context, cnf *art.Config, req bool) *art.DataSource {
 
 	ds, ok := cnf.DataSource[flag]
 	art.ExitIfTrue(!ok, -5, "db not found in config, source=%s", flag)
-	log.Printf("[TRACE] got source db=%s\n", flag)
+	art.LogTrace("got source db=%s", flag)
 
 	return &ds
 }
@@ -70,11 +84,11 @@ func checkEnvs(ctx *cli.Context) map[string]string {
 		kv := strings.SplitN(env, "=", 2)
 		if len(kv) == 2 {
 			envs[kv[0]] = kv[1]
-			log.Printf("[TRACE] got input env, k=%q, v=%q\n", kv[0], kv[1])
+			art.LogTrace("got input env, k=%q, v=%q", kv[0], kv[1])
 		} else {
 			ov, ok := os.LookupEnv(kv[0])
 			art.ExitIfTrue(!ok, -6, "system ENV not found, env=%q", env)
-			log.Printf("[TRACE] got system env, k=%q, v=%q\n", kv[0], ov)
+			art.LogTrace("got system env, k=%q, v=%q", kv[0], ov)
 		}
 	}
 
@@ -83,7 +97,7 @@ func checkEnvs(ctx *cli.Context) map[string]string {
 	return envs
 }
 
-func checkKind(ctx *cli.Context, knd []string, dft string) string {
+func checkType(ctx *cli.Context, knd []string, dft string) string {
 	flag := ctx.String("k")
 	kind, ok := dft, false
 	for _, v := range knd {
@@ -94,7 +108,7 @@ func checkKind(ctx *cli.Context, knd []string, dft string) string {
 		}
 	}
 	art.ExitIfTrue(!ok, -6, "unsupported (K)ind=%q", flag)
-	log.Printf("[TRACE] got kind=%s\n", flag)
+	art.LogTrace("got kind=%s", flag)
 	return kind
 }
 
@@ -104,7 +118,7 @@ func checkRegx(ctx *cli.Context) []*regexp.Regexp {
 	for _, v := range args {
 		re, err := regexp.Compile(v)
 		art.ExitIfError(err, -6, "failed to compile Regexp=%v", v)
-		log.Printf("[TRACE] got table regexp=%s\n", v)
+		art.LogTrace("got table regexp=%s", v)
 		regx = append(regx, re)
 	}
 	return regx
@@ -117,6 +131,7 @@ func checkRisk(ctx *cli.Context) bool {
 
 // command //
 func exec(ctx *cli.Context) (err error) {
+	checkMlvl(ctx)
 	conf := checkConf(ctx)
 	dest := checkDest(ctx, conf, true)
 	risk := checkRisk(ctx)
@@ -125,6 +140,7 @@ func exec(ctx *cli.Context) (err error) {
 }
 
 func revi(ctx *cli.Context) (err error) {
+	checkMlvl(ctx)
 	conf := checkConf(ctx)
 	dest := checkDest(ctx, conf, true)
 	revi := ctx.String("r")
@@ -136,24 +152,27 @@ func revi(ctx *cli.Context) (err error) {
 }
 
 func diff(ctx *cli.Context) error {
+	checkMlvl(ctx)
 	conf := checkConf(ctx)
 	dest := checkDest(ctx, conf, false)
 	srce := checkSrce(ctx, conf, false)
-	kind := checkKind(ctx, art.DiffKind, art.DiffTbl)
+	kind := checkType(ctx, art.DiffType, art.DiffTbl)
 	tbls := checkRegx(ctx)
 	return art.Diff(&conf.Preference, srce, dest, kind, tbls)
 }
 
 func sync(ctx *cli.Context) error {
+	checkMlvl(ctx)
 	conf := checkConf(ctx)
 	dest := checkDest(ctx, conf, false)
 	srce := checkSrce(ctx, conf, false)
-	kind := checkKind(ctx, art.SyncKind, art.SyncTbl)
+	kind := checkType(ctx, art.SyncType, art.SyncTbl)
 	tbls := checkRegx(ctx)
 	return art.Sync(srce, dest, kind, tbls)
 }
 
 func tree(ctx *cli.Context) error {
+	checkMlvl(ctx)
 	conf := checkConf(ctx)
 	conf.StartupEnv = checkEnvs(ctx)
 	srce := checkSrce(ctx, conf, true)
@@ -165,6 +184,7 @@ func tree(ctx *cli.Context) error {
 }
 
 func sqlx(ctx *cli.Context) error {
+	checkMlvl(ctx)
 	conf := checkConf(ctx)
 	conf.StartupEnv = checkEnvs(ctx)
 	sqls := checkSqls(ctx)
@@ -174,19 +194,21 @@ func sqlx(ctx *cli.Context) error {
 	}
 
 	for i, t := range sqlx {
-		fmt.Printf("\n==== summary=%s ====", sqls[i].Path)
+		pth := sqls[i].Path
+		art.OutTrace("==== tree=%s ====", pth)
 		for _, x := range t.Exes {
-			fmt.Printf("\n%s", x.Tree())
+			art.OutTrace("%s", x.Tree())
 		}
+		art.OutTrace("==== debug to see more ====")
 
-		fmt.Printf("\n==== envx file=%s ====", sqls[i].Path)
+		art.OutDebug("==== envx file=%s ====", pth)
 		for k, v := range t.Envs {
-			fmt.Printf("\n%s=%s", k, v)
+			art.OutDebug("%s=%s", k, v)
 		}
 
-		fmt.Printf("\n==== exex file=%s ====", sqls[i].Path)
+		art.OutDebug("==== exex file=%s ====", pth)
 		for _, x := range t.Exes {
-			fmt.Printf("\n%v", x)
+			art.OutDebug("%v", x)
 		}
 	}
 	return nil
@@ -198,67 +220,85 @@ func main() {
 	app := cli.NewApp()
 
 	app.Author = "github.com/trydofor"
-	app.Version = "0.9.4"
+	app.Version = "0.9.5"
 	app.Compiled = time.Now()
 
 	app.Name = "godbart"
-	app.Usage = app.Name + " command args"
-	app.Description = `SQL-based CLI for RDBMS schema versioning & data migration
+	app.Usage = "god, bart is a boy of ten."
+	app.UsageText = app.Name + " command [options] [arguments...]"
 
-		readme   - https://github.com/trydofor/godbart
-		config   - https://github.com/trydofor/godbart/blob/master/godbart.toml
-		demo sql - https://github.com/trydofor/godbart/tree/master/demo/sql/
+	app.Description = ` a SQL-based CLI for RDBMS versioning & migration
+
+		use "command -h" to see command's help.
+		opt  - require exactly one
+		opt? - optional zero or one
+		opt* - conditional zero or more
+
+		readme - https://github.com/trydofor/godbart
+		config - https://github.com/trydofor/godbart/blob/master/godbart.toml
+		sample - https://github.com/trydofor/godbart/tree/master/demo/sql/
 `
 
 	//
 	confFlag := &cli.StringFlag{
 		Name:  "c",
-		Usage: "the main (C)onfig",
+		Usage: "the main (C)onfig `FILE`",
 		Value: "godbart.toml",
 	}
 
 	destFlag := &cli.StringSliceFlag{
 		Name:  "d",
-		Usage: "the (D)estination db in config",
+		Usage: "the (D)estination `DB*` in config",
 	}
 
 	envsFlag := &cli.StringSliceFlag{
 		Name:  "e",
-		Usage: "the (E)nvironment. eg. \"-e MY_DATE='2015-11-18 12:34:56'\"",
+		Usage: "the (E)nvironment, `K=v*`",
 	}
 
-	difkFlag := &cli.StringFlag{
-		Name:  "k",
-		Usage: "the (K)ind to diff [all|tbl|ddl]. all:column, index, trigger. ddl:show ddl (table, trigger). tbl: table name.",
-		Value: "tbl",
-	}
-
-	synkFlag := &cli.StringFlag{
-		Name:  "k",
-		Usage: "the (K)ind to sync [all|tbl|trg]. all:column, index, trigger. trg:trigger. tbl:table,index",
-		Value: "tbl",
+	mlvlFlag := &cli.StringFlag{
+		Name:  "l",
+		Usage: "the message (L)evel, `debug?` :[debug|trace|error]",
+		Value: "debug",
 	}
 
 	maskFlag := &cli.StringFlag{
 		Name:  "m",
-		Usage: "the (M)ask (regexp) of the revision",
+		Usage: "the (M)ask `regexp?` of the revision",
 		Value: "[0-9]{10,}",
 	}
 
 	rqryFlag := &cli.StringFlag{
 		Name:  "q",
-		Usage: "the (Q)uery Prefix (string) of revision",
+		Usage: "the (Q)uery Prefix `string?` of revision",
 		Value: "SELECT",
 	}
 
 	reviFlag := &cli.StringFlag{
 		Name:  "r",
-		Usage: "the (R)evision to run to",
+		Usage: "the (R)evision `string` to run to",
 	}
 
 	srceFlag := &cli.StringFlag{
 		Name:  "s",
-		Usage: "the (S)ource db in config",
+		Usage: "the (S)ource `DB` in config",
+	}
+
+	difkFlag := &cli.StringFlag{
+		Name:  "t",
+		Usage: "diff (T)ype, `tbl?`. [all:col+idx+trg | ddl:ddl for table+trigger |tbl: table name.]",
+		Value: "tbl",
+	}
+
+	synkFlag := &cli.StringFlag{
+		Name:  "t",
+		Usage: "sync (T)ype `all?`. [all:col+idx+trg | trg:trigger | tbl:col+idx]",
+		Value: "tbl",
+	}
+
+	sufxFlag := &cli.StringSliceFlag{
+		Name:  "x",
+		Usage: "the Suffi(X) `string?` of SQL files. eg \".sql\"",
 	}
 
 	riskFlag := &cli.BoolFlag{
@@ -266,21 +306,17 @@ func main() {
 		Usage: "dangerous SQL can lost data, you agree to take any risk on yourself!",
 	}
 
-	sufxFlag := &cli.StringSliceFlag{
-		Name:  "x",
-		Usage: "the Suffi(X) (string) of SQL files. eg \".sql\"",
-	}
-
 	//
 	app.Commands = []cli.Command{
 		{
 			Name:      "exec",
-			Usage:     "execute SQLs on dbs",
+			Usage:     "execute SQLs on DBs",
 			ArgsUsage: "some files or paths of SQLs",
 			Flags: []cli.Flag{
 				confFlag,
 				sufxFlag,
 				destFlag,
+				mlvlFlag,
 				riskFlag,
 			},
 			Action: exec,
@@ -296,6 +332,7 @@ func main() {
 				reviFlag,
 				maskFlag,
 				rqryFlag,
+				mlvlFlag,
 				riskFlag,
 			},
 			Action: revi,
@@ -309,25 +346,27 @@ func main() {
 				srceFlag,
 				destFlag,
 				difkFlag,
+				mlvlFlag,
 			},
 			Action: diff,
 		},
 		{
 			Name:      "sync",
 			Usage:     "create table d.A like s.B",
-			ArgsUsage: "tables to create (regexp/i). empty means all",
+			ArgsUsage: "tables to sync (regexp/i). empty means all",
 			Flags: []cli.Flag{
 				confFlag,
 				srceFlag,
 				destFlag,
 				synkFlag,
+				mlvlFlag,
 				riskFlag,
 			},
 			Action: sync,
 		},
 		{
 			Name:      "tree",
-			Usage:     "move tree data between dbs",
+			Usage:     "deal data-tree between DBs",
 			ArgsUsage: "some files or paths of SQLs",
 			Flags: []cli.Flag{
 				confFlag,
@@ -335,6 +374,7 @@ func main() {
 				destFlag,
 				srceFlag,
 				envsFlag,
+				mlvlFlag,
 				riskFlag,
 			},
 			Action: tree,
@@ -346,6 +386,7 @@ func main() {
 			Flags: []cli.Flag{
 				confFlag,
 				envsFlag,
+				mlvlFlag,
 			},
 			Action: sqlx,
 		},

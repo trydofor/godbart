@@ -1,7 +1,6 @@
 package art
 
 import (
-	"fmt"
 	"io/ioutil"
 	"testing"
 )
@@ -10,6 +9,7 @@ import (
 
 func Test_ParseSqlx(t *testing.T) {
 
+	MsgLevel=LvlTrace
 	//file := "../demo/sql/tree/test.sql"
 	file := "../demo/sql/tree/tree.sql"
 	//file := "../demo/sql/init/1.table.sql"
@@ -26,18 +26,18 @@ func Test_ParseSqlx(t *testing.T) {
 	sqlx, err := ParseSqlx(sqls, envs)
 	panicIfErr(err)
 
-	fmt.Println("==== envx ====")
+	OutTrace("==== envx ====")
 	for k, v := range sqlx.Envs {
-		fmt.Printf("%s=%s\n", k, v)
+		OutTrace("%s=%s", k, v)
 	}
 
-	fmt.Println("==== exes ====")
+	OutTrace("==== exes ====")
 	for _, x := range sqlx.Exes {
-		fmt.Printf("%v\n", x)
+		OutTrace("%v", x)
 	}
 
-	fmt.Println("==== summary ====")
+	OutTrace("==== summary ====")
 	for _, x := range sqlx.Exes {
-		fmt.Printf("%v\n", x.Tree())
+		OutTrace("%v", x.Tree())
 	}
 }

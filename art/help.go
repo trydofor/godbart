@@ -12,21 +12,48 @@ import (
 	"time"
 )
 
+func logDebug(m string, a ...interface{}) {
+	if MsgLevel >= LvlDebug {
+		log.Printf("[DEBUG] "+m+"\n", a...)
+	}
+}
+func LogTrace(m string, a ...interface{}) {
+	if MsgLevel >= LvlTrace {
+		log.Printf("[TRACE] "+m+"\n", a...)
+	}
+
+}
+func LogError(m string, a ...interface{}) {
+	if MsgLevel >= LvlError {
+		log.Fatalf("[ERROR] "+m+"\n", a...)
+	}
+}
+
+func OutDebug(m string, a ...interface{}) {
+	if MsgLevel >= LvlDebug {
+		fmt.Printf(m+"\n", a...)
+	}
+}
+
+func OutTrace(m string, a ...interface{}) {
+	fmt.Printf(m+"\n", a...)
+}
+
 func errorAndLog(m string, a ...interface{}) error {
 	s := fmt.Sprintf(m, a...)
-	log.Fatalf("[ERROR] %s\n", s)
+	LogTrace("%s", s)
 	return errors.New(s)
 }
 
 func openDbAndLog(db *DataSource) (conn *MyConn, err error) {
-	log.Printf("[TRACE] try to open db=%s\n", db.Code)
+	logDebug("try to open db=%s", db.Code)
 	conn = &MyConn{}
 	err = conn.Open(pref, db)
 
 	if err == nil {
-		log.Printf("[TRACE] successfully opened db=%s\n", db.Code)
+		LogTrace("successfully opened db=%s", db.Code)
 	} else {
-		log.Fatalf("[ERROR] failed to open db=%s, err=%v\n", db.Code, err)
+		LogError("failed to open db=%s, err=%v", db.Code, err)
 	}
 
 	return
@@ -36,26 +63,25 @@ func openDbAndLog(db *DataSource) (conn *MyConn, err error) {
 func ExitIfError(err error, code int, format string, args ...interface{}) {
 	if err != nil {
 		args = append(args, err)
-		log.Fatalf("[ERROR] "+format+", err=%v\n", args...)
+		LogError(""+format+", err=%v", args...)
 		os.Exit(code)
 	}
 }
 
 func ExitIfTrue(tru bool, code int, format string, args ...interface{}) {
 	if tru {
-		log.Fatalf("[ERROR] "+format+"\n", args...)
+		LogError(""+format+"", args...)
 		os.Exit(code)
 	}
 }
 
-const (
-	EnvUser      = "USER"
-	EnvHost      = "HOST"
-	EnvDate      = "DATE"
-	EnvRule      = "ENV-CHECK-RULE"
-	EnvRuleError = "ERROR"
-	EnvRuleEmpty = "EMPTY"
-)
+func fmtTime(t time.Time, f string) string {
+	if len(f) == 0 {
+		return t.Format("2006-01-02 15:04:05.000")
+	} else {
+		return t.Format(f)
+	}
+}
 
 func BuiltinEnvs(envs map[string]string) {
 
@@ -63,10 +89,10 @@ func BuiltinEnvs(envs map[string]string) {
 		cu, err := user.Current()
 		if err == nil {
 			envs[EnvUser] = cu.Username
-			log.Printf("[TRACE] put builtin env, k=%s, v=%q\n", EnvUser, cu.Username)
+			LogTrace("put builtin env, k=%s, v=%q", EnvUser, cu.Username)
 		} else {
 			envs[EnvUser] = ""
-			log.Fatalf("[ERROR] put builtin env empty, k=%s, err=%v\n", EnvUser, err)
+			LogError("put builtin env empty, k=%s, err=%v", EnvUser, err)
 		}
 	}
 
@@ -74,26 +100,26 @@ func BuiltinEnvs(envs map[string]string) {
 		ht, err := os.Hostname()
 		if err == nil {
 			envs[EnvHost] = ht
-			log.Printf("[TRACE] put builtin env, k=%s, v=%q\n", EnvHost, ht)
+			LogTrace("put builtin env, k=%s, v=%q", EnvHost, ht)
 		} else {
 			envs[EnvHost] = "localhost"
-			log.Fatalf("[ERROR] put builtin 'localhost', k=%s, err=%v\n", EnvHost, err)
+			LogError("put builtin 'localhost', k=%s, err=%v", EnvHost, err)
 		}
 	}
 
 	if _, ok := envs[EnvDate]; !ok {
 		dt := time.Now().Format("2006-01-02 15:04:05") // :-P
 		envs[EnvDate] = dt
-		log.Printf("[TRACE] put builtin env, k=%s, v=%q\n", EnvDate, dt)
+		LogTrace("put builtin env, k=%s, v=%q", EnvDate, dt)
 	}
 
 	if rl, ok := envs[EnvRule]; !ok {
 		envs[EnvRule] = EnvRuleError
-		log.Printf("[TRACE] put builtin env, k=%s, v=%q\n", EnvRule, EnvRuleError)
+		LogTrace("put builtin env, k=%s, v=%q", EnvRule, EnvRuleError)
 	} else {
 		switch rl {
 		case EnvRuleEmpty, EnvRuleError:
-			log.Printf("[TRACE] use builtin env, k=%s, v=%q\n", EnvRule, rl)
+			LogTrace("use builtin env, k=%s, v=%q", EnvRule, rl)
 		default:
 			ExitIfTrue(true, -4, "unsupport env, key=%s, value=%s", EnvRule, rl)
 		}
@@ -113,7 +139,7 @@ func FileWalker(path []string, flag []string) ([]FileEntity, error) {
 	var ff = func(p string, f os.FileInfo, e error) error {
 
 		if e != nil {
-			log.Fatalf("[ERROR] error=%v at a path=%q\n", e, p)
+			LogError("error=%v at a path=%q", e, p)
 			return e
 		}
 
@@ -137,10 +163,10 @@ func FileWalker(path []string, flag []string) ([]FileEntity, error) {
 		if h {
 			data, err := ioutil.ReadFile(p)
 			if err != nil {
-				log.Fatalf("[ERROR] can read file=%s\n", f)
+				LogError("can read file=%s", f)
 				return err
 			}
-			log.Printf("[TRACE] got file=%s\n", p)
+			LogTrace("got file=%s", p)
 			files = append(files, FileEntity{p, string(data)})
 		}
 

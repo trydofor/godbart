@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"database/sql"
 	"fmt"
-	"log"
 	"regexp"
 	"strconv"
 	"strings"
@@ -48,7 +47,7 @@ func ParseTree(pref *Preference, envs map[string]string, file []FileEntity) ([]*
 		sqls := ParseSqls(pref, &f)
 		exe, er := ParseSqlx(sqls, envs)
 		if er != nil {
-			log.Fatalf("[ERROR] failed to parse sqlx, file=%s\n", f.Path)
+			LogError("failed to parse sqlx, file=%s", f.Path)
 			return nil, er
 		}
 		sqlx = append(sqlx, exe)
@@ -80,8 +79,7 @@ func RunSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, risk bo
 
 		one, end, ech := actOneEndFor(exe)
 		buf := bytes.NewBuffer(make([]byte, 0, 50))
-		buf.WriteString("LINE=")
-		buf.WriteString(exe.Seg.Line)
+		buf.WriteString(fmt.Sprintf("ID=%d, LINE=%s", exe.Seg.Head, exe.Seg.Line))
 
 		if ech {
 			buf.WriteString(", FOR")
@@ -99,15 +97,17 @@ func RunSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, risk bo
 
 		info := buf.String()
 		if src {
-			fmt.Printf("%s%s SRC %s\n%s%s\n", ncm, lcm, info, sql, dlt)
+			OutTrace("%s%s SRC %s", ncm, lcm, info)
+			OutDebug("%s%s", sql, dlt)
 		} else {
 			ddq := strings.Replace(sql, "\n", ncm, -1)
-			fmt.Printf("%s%s OUT %s\n%s %s%s\n", ncm, lcm, info, lcm, ddq, dlt)
+			OutTrace("%s%s OUT %s", ncm, lcm, info)
+			OutDebug("%s %s%s", lcm, ddq, dlt)
 		}
 	}
 
 	for _, exe := range sqlx.Exes {
-		er := runExe(exe, src, dst, ctx, outf, risk)
+		er := runExe(exe, src, dst, ctx, outf, risk, 1)
 		if er != nil {
 			return er
 		}
@@ -118,11 +118,12 @@ func RunSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, risk bo
 
 var defValCol = regexp.MustCompile(`(VAL|COL)\[([^\[\]]*)\]`)
 
-func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, outf func(exe *Exe, str string, src bool), risk bool) error {
+func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, outf func(exe *Exe, str string, src bool), risk bool, lvl int) error {
 
 	// 判断数据源和执行条件
 	if arg, igr := skipHasNotRun(src, exe.Acts, ctx); igr {
-		log.Printf("[TRACE] SKIP exe on Condition. arg=%#v seg=%#v\n", arg, exe.Seg)
+		LogTrace("SKIP exe on Condition. arg=%d seg=%d", arg.Head, exe.Seg.Head)
+		logDebug("arg=%#v seg=%#v", arg, exe.Seg)
 		return nil
 	}
 
@@ -147,7 +148,8 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 		}
 	}()
 
-	log.Printf("[TRACE] ready to run, line=%s, stmt=%#v\n", line, stmt)
+	LogTrace("take stmt, id=%d, lvl=%d line=%s", head, lvl, line)
+	logDebug("stmt= %q", stmt)
 	if len(exe.Defs) > 0 { // 有结果集提取，不支持OUT
 		var ff = func(row *sql.Rows) error {
 			cols, er := row.ColumnTypes()
@@ -166,7 +168,7 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 			for row.Next() {
 				cnt++
 				jobx = true
-				log.Printf("[TRACE] processing %d-th row, line=%s\n", cnt, line)
+				LogTrace("deal %d-th row, id=%d, line=%s", cnt, head, line)
 				row.Scan(ptrs...)
 
 				//// 提取结果集
@@ -182,12 +184,12 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 								if sub[1] == "COL" {
 									cln := cols[j].Name()
 									ctx[hld] = cln
-									log.Printf("[TRACE]     simple sys DEF, hold=%s, para=%s, col-name=%s\n", hld, ptn, cln)
+									logDebug("simple sys DEF, hold=%s, para=%s, col-name=%s", hld, ptn, cln)
 								} else { // VAL
 									ctx[hld] = vals[j]
 									dbt := cols[j].DatabaseTypeName()
 									ctx[hld+":DatabaseTypeName"] = dbt
-									log.Printf("[TRACE]     simple sys DEF, hold=%s, para=%s, value=%#v, dbtype=%s\n", hld, ptn, vals[j], dbt)
+									logDebug("simple sys DEF, hold=%s, para=%s, value=%#v, dbtype=%s", hld, ptn, vals[j], dbt)
 								}
 							} else {
 								pld := fmt.Sprintf("%s:%d", hld, k) // 保证多值的不能直接找到
@@ -197,7 +199,7 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 										cls[i] = c.Name()
 									}
 									ctx[pld] = cls
-									log.Printf("[TRACE]     simple sys DEF, hold=%s, para=%s, values'count=%d\n", pld, ptn, len(cls))
+									logDebug("simple sys DEF, hold=%s, para=%s, values'count=%d", pld, ptn, len(cls))
 								} else {
 									dbt := make([]string, ln)
 									for i, c := range cols {
@@ -205,7 +207,7 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 									}
 									ctx[pld] = vals
 									ctx[pld+":DatabaseTypeName"] = dbt
-									log.Printf("[TRACE]     simple sys DEF, hold=%s, para=%s, value'count=%d\n", pld, ptn, len(dbt))
+									logDebug("simple sys DEF, hold=%s, para=%s, value'count=%d", pld, ptn, len(dbt))
 								}
 							}
 						}
@@ -217,7 +219,7 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 							dbt := cols[i].DatabaseTypeName()
 							ctx[hld+":DatabaseTypeName"] = dbt
 							ltr, _ := src.Literal(vals[i], dbt)
-							log.Printf("[TRACE]     simple usr DEF, hold=%s, para=%s, value=%s\n", hld, ptn, ltr)
+							logDebug("simple usr DEF, hold=%s, para=%s, value=%s", hld, ptn, ltr)
 							lost = false
 							break
 						}
@@ -233,8 +235,8 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 					if !shouldForAct(son, cnt) {
 						continue
 					}
-					log.Printf("[TRACE] fork ONE/FOR child, line=%s, parent=%s\n", son.Seg.Line, line)
-					er := runExe(son, src, dst, ctx, outf, risk)
+					LogTrace("fork ONE/FOR child=%d, parent=%d", son.Seg.Head, head)
+					er := runExe(son, src, dst, ctx, outf, risk, lvl+1)
 					if er != nil {
 						return er
 					}
@@ -251,15 +253,15 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 					if !shouldEndAct(son, cnt) {
 						continue
 					}
-					log.Printf("[TRACE] fork END child=%s, parent=%s\n", son.Seg.Line, line)
-					er := runExe(son, src, dst, ctx, outf, risk)
+					LogTrace("fork END child=%d, parent=%d", son.Seg.Head, head)
+					er := runExe(son, src, dst, ctx, outf, risk,lvl+1)
 					if er != nil {
 						return er
 					}
 				}
 			}
 
-			log.Printf("[TRACE] processed %d rows, line=%s, stmt=%#v\n", cnt, line, stmt)
+			LogTrace("done %d rows, id=%d, line=%s", cnt, head, line)
 
 			return nil
 		}
@@ -273,40 +275,40 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 		dcnt := len(dst)
 		if risk {
 			if rsrc {
-				log.Printf("[TRACE] running on SRC db=%s\n", src.DbName())
+				LogTrace("running on SRC db=%s", src.DbName())
 				if a, e := src.Exec(stmt, vals...); e != nil {
-					log.Fatalf("[ERROR] failed on SRC db=%s, err=%v\n", src.DbName(), e)
+					LogError("failed on SRC db=%s, err=%v", src.DbName(), e)
 					return e
 				} else {
-					log.Printf("[TRACE] done %d affected on SRC db=%s\n", a, src.DbName())
+					LogTrace("done %d affected on SRC db=%s", a, src.DbName())
 				}
 			}
 
 			if rout {
 				for i, db := range dst {
-					log.Printf("[TRACE] running on OUT[%d/%d] db=%s\n", i+1, dcnt, db.DbName())
+					LogTrace("running on OUT[%d/%d] db=%s", i+1, dcnt, db.DbName())
 					if a, e := db.Exec(stmt, vals...); e != nil {
-						log.Fatalf("[ERROR] failed on OUT[%d/%d] db=%s, err=%v\n", i+1, dcnt, db.DbName(), e)
+						LogError("failed on OUT[%d/%d] db=%s, err=%v", i+1, dcnt, db.DbName(), e)
 						return e
 					} else {
-						log.Printf("[TRACE] done %d affected on OUT[%d/%d] db=%s\n", a, i+1, dcnt, db.DbName())
+						LogTrace("done %d affected on OUT[%d/%d] db=%s", a, i+1, dcnt, db.DbName())
 					}
 				}
 			}
 		} else {
 			if rsrc {
-				log.Printf("[TRACE] fake run on SRC db=%s\n", src.DbName())
+				LogTrace("fake run on SRC db=%s", src.DbName())
 			}
 
 			if rout {
 				for i, db := range dst {
-					log.Printf("[TRACE] fake run on OUT[%d/%d] db=%s\n", i+1, dcnt, db.DbName())
+					LogTrace("fake run on OUT[%d/%d] db=%s", i+1, dcnt, db.DbName())
 				}
 			}
 		}
 	}
 
-	log.Printf("[TRACE] accomplished stmt, line=%s\n\n", line)
+	LogTrace("done stmt, id=%d, lvl=%d, line=%s\n", head, lvl, line)
 	return nil
 }
 
@@ -404,19 +406,17 @@ func shouldEndAct(exe *Exe, cnt int) bool {
 	return end
 }
 
-var nxl = []interface{}{}
-
 func buildStatement(exe *Exe, ctx map[string]interface{}, src *MyConn) (stmt, prnt string, vals []interface{}, err error) {
 	stmt = exe.Seg.Text
 	prnt = stmt
 
 	if hlen := len(exe.Deps); hlen > 0 {
-		log.Printf("[TRACE] building line=%s,stmt=%#v\n", exe.Seg.Line, stmt)
+		logDebug("building line=%s,stmt=%#v", exe.Seg.Line, stmt)
 		vals = make([]interface{}, 0, hlen)
 		var rtn, std strings.Builder // return,stdout
 		off := 0
 		for _, dep := range exe.Deps {
-			log.Printf("[TRACE]   parsing dep=%#v\n", dep)
+			logDebug("parsing dep=%#v", dep)
 
 			if dep.Off > off {
 				tmp := stmt[off:dep.Off]
@@ -444,11 +444,11 @@ func buildStatement(exe *Exe, ctx map[string]interface{}, src *MyConn) (stmt, pr
 					} else {
 						std.WriteString(v)
 					}
-					log.Printf("[TRACE]     dynamic replace hold=%s, with quote=%t, value=%s\n", hld, b, v)
+					logDebug("dynamic replace hold=%s, with quote=%t, value=%s", hld, b, v)
 				} else {
 					rtn.WriteString(v)
 					std.WriteString(v)
-					log.Printf("[TRACE]     static simple replace hold=%s, with value=%s\n", hld, v)
+					logDebug("static simple replace hold=%s, with value=%s", hld, v)
 				}
 			} else {
 				// 多值或模式
@@ -495,10 +495,10 @@ func buildStatement(exe *Exe, ctx map[string]interface{}, src *MyConn) (stmt, pr
 					if len(jner) == 0 {
 						if spt := ptn[sub[4]:sub[5]]; len(spt) > 0 {
 							jner = spt
-							log.Printf("[TRACE] use joiner=%s. hold=%s, index=%d\n", jner, hld, k)
+							logDebug("use joiner=%s. hold=%s, index=%d", jner, hld, k)
 						} else if k == mtln-1 {
 							jner = ","
-							log.Printf("[TRACE] user default joiner=%s\n", jner)
+							logDebug("user default joiner=%s", jner)
 						}
 					}
 
@@ -529,8 +529,8 @@ func buildStatement(exe *Exe, ctx map[string]interface{}, src *MyConn) (stmt, pr
 					}
 
 					if ptn[sub[2]:sub[3]] == "COL" {
-						mval = append(mval, hv, nxl)
-						log.Printf("[TRACE]  get %d COL values. hold=%s, para=%s", k, hld, ptn)
+						mval = append(mval, hv, EmptyArr)
+						logDebug("get %d COL values. hold=%s, para=%s", k, hld, ptn)
 					} else {
 						dv, dk := ctx[pld+":DatabaseTypeName"]
 						if !dk {
@@ -538,12 +538,12 @@ func buildStatement(exe *Exe, ctx map[string]interface{}, src *MyConn) (stmt, pr
 							return
 						}
 						mval = append(mval, dv, hv)
-						log.Printf("[TRACE]  get %d VAL values. hold=%s, para=%s", len(dv.([]string)), hld, ptn)
+						logDebug("get %d VAL values. hold=%s, para=%s", len(dv.([]string)), hld, ptn)
 					}
 				}
 
 				// 处理数据
-				log.Printf("[TRACE] processing pattern STR with %d items", itct)
+				logDebug("deal pattern STR with %d items", itct)
 				for k := 0; k < itct; k++ {
 					if k > 0 {
 						rtn.WriteString(jner)

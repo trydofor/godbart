@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"log"
 	"math/rand"
 	"net"
 	"os"
@@ -85,11 +84,9 @@ type Room struct {
 	jcid int64    // 待执行的 job id
 }
 
-var CtrlRoom = &Room{}
-
 func (room *Room) Open(port int, name string) {
 	if port <= 0 {
-		log.Printf("[TRACE] skip ControlPort, name=%s, port=%d", name, port)
+		LogTrace("skip ControlPort, name=%s, port=%d", name, port)
 	}
 
 	// 创建房间
@@ -109,7 +106,7 @@ func (room *Room) Open(port int, name string) {
 		room.echo = make(chan string)
 		room.boff = false
 	default:
-		log.Fatalf("[ERROR] unsupported room %s\n", name)
+		LogError("unsupported room %s", name)
 		os.Exit(CtrlExitcd)
 	}
 
@@ -122,11 +119,11 @@ func (room *Room) Open(port int, name string) {
 			info := askInfo(ntw)
 			es = fmt.Sprintf("an instant is running info=%s", info)
 		}
-		log.Fatalf("[ERROR] %s\n", es)
+		LogError("%s", es)
 		os.Exit(CtrlExitcd)
 	}
 
-	log.Printf("[TRACE] CONTROLPORT started, port=%d, pid=%d, PASS=%s\n", port, room.pid, room.pass)
+	LogTrace("CONTROLPORT started, port=%d, pid=%d, PASS=%s", port, room.pid, room.pass)
 
 	//
 	defer server.Close()
@@ -135,7 +132,7 @@ func (room *Room) Open(port int, name string) {
 	for {
 		conn, err := server.Accept()
 		if err != nil {
-			log.Fatalf("[ERROR] a bad client connection error=%v\n", err)
+			LogError("a bad client connection error=%v", err)
 		}
 		go room.dealConn(conn)
 	}
@@ -172,20 +169,20 @@ func (room *Room) putJob(cmnd, user string) {
 	jb := &CtrlJob{id, cmnd, user, dt}
 	room.jobs.Store(id, jb)
 	room.echo <- fmt.Sprintf("job=%v applied", jb)
-	log.Printf("[TRACE] job=%v applied", jb)
+	LogTrace("job=%v applied", jb)
 }
 
-func (room *Room) delJob(user string, id int) {
+func (room *Room) delJob(user string, id int64) {
 	if id < 0 {
 		room.jobs.Range(func(k, v interface{}) bool {
 			room.jobs.Delete(k)
 			return true
 		})
-		log.Printf("[TRACE] killed all jobs, user=%s", user)
+		LogTrace("killed all jobs, user=%s", user)
 		room.echo <- fmt.Sprintf("killed all jobs, user=%s", user)
 	} else {
 		room.jobs.Delete(id);
-		log.Printf("[TRACE] job id=%d killed by user=%s", id, user)
+		LogTrace("job id=%d killed by user=%s", id, user)
 		room.echo <- fmt.Sprintf("job id=%d killed by user=%s", id, user)
 	}
 }
@@ -193,7 +190,7 @@ func (room *Room) delJob(user string, id int) {
 func (room *Room) dealConn(conn net.Conn) {
 	user := conn.RemoteAddr().String()
 	defer func() {
-		log.Printf("[TRACE] client %s is closed.\n", user)
+		LogTrace("client %s is closed.", user)
 		room.user.Delete(user)
 		conn.Close()
 	}()
@@ -234,20 +231,22 @@ func (room *Room) dealConn(conn net.Conn) {
 		case roomBaseInfo:
 			conn.Write(room.infoByte(user))
 		case roomBaseKill:
-			jbid := -1
+			var jbid int64
 			if len(part) > 1 {
-				id, er := strconv.ParseInt(part[1], 10, 32)
+				id, er := strconv.ParseInt(part[1], 10, 64)
 				if er != nil {
 					conn.Write([]byte(fmt.Sprintf("bad job id %s, err=%s", line, er.Error())));
 					continue
 				}
-				jbid = int(id)
+				jbid = int64(id)
+			} else {
+				jbid = -1
 			}
 			room.delJob(user, jbid)
 		case roomBasePass:
 			room.pass = makePass()
 			conn.Write([]byte(fmt.Sprintf("NEW-PASS=%s\r\n", room.pass)))
-			log.Printf("[TRACE] client %s chagned pass. NEW-PASS=%s\n", user, room.pass)
+			LogTrace("client %s chagned pass. NEW-PASS=%s", user, room.pass)
 			room.echo <- user + " changed room pass."
 		default:
 			if strings.HasPrefix(line, "/") {
@@ -374,7 +373,7 @@ func (room *Room) dealJobx(job *CtrlJob, args ... interface{}) {
 			return
 		}
 
-		headRun, headArg := -1, -1
+		headRun, headArg := args[0].(int), -1
 		part := strings.SplitN(job.cmnd, " ", 2)
 		if len(part) > 1 {
 			hd, er := strconv.ParseInt(part[1], 10, 32)
@@ -386,21 +385,20 @@ func (room *Room) dealJobx(job *CtrlJob, args ... interface{}) {
 			if len(args) < 1 {
 				return
 			}
-			headRun = args[0].(int)
 		}
 
-		log.Printf("[TRACE] at=%d, job=%v\n", headRun, job)
+		LogTrace("at=%d, job=%v", headRun, job)
 		room.echo <- fmt.Sprintf("at=%d, job=%v\n", headRun, job)
 
 		if strings.HasSuffix(part[0], roomTreeStop) {
 			if headArg < 0 {
-				log.Printf("[TRACE] exited by %s\n", job.cmnd)
+				LogTrace("exited by %s", job.cmnd)
 				room.echo <- fmt.Sprintf("exited in 5 seconds, by %s\n", job.cmnd)
 				time.Sleep(time.Second * 5)
 				os.Exit(CtrlExitcd)
 			} else {
 				if headRun == headArg {
-					log.Printf("[TRACE] exited by %s\n", job.cmnd)
+					LogTrace("exited by %s", job.cmnd)
 					room.echo <- fmt.Sprintf("exited in 5 seconds, by %s\n", job.cmnd)
 					time.Sleep(time.Second * 5)
 					os.Exit(CtrlExitcd)
@@ -410,7 +408,7 @@ func (room *Room) dealJobx(job *CtrlJob, args ... interface{}) {
 			}
 		} else if strings.HasSuffix(part[0], roomTreeWait) {
 			if headArg < 0 {
-				log.Printf("[TRACE] waiting by %s\n", job.cmnd)
+				LogTrace("waiting by %s", job.cmnd)
 				for {
 					time.Sleep(time.Second * 3)
 					_, oh := room.jobs.Load(job.id)
@@ -420,7 +418,7 @@ func (room *Room) dealJobx(job *CtrlJob, args ... interface{}) {
 				}
 			} else {
 				if headRun == headArg {
-					log.Printf("[TRACE] waiting by %s\n", job.cmnd)
+					LogTrace("waiting by %s", job.cmnd)
 					for {
 						time.Sleep(time.Second * 3)
 						_, oh := room.jobs.Load(job.id)
@@ -437,7 +435,7 @@ func (room *Room) dealJobx(job *CtrlJob, args ... interface{}) {
 }
 
 func (room *Room) putEnv(key string, val interface{}) {
-	log.Printf("[TRACE] put room env key=%s, val=%#v\n", key, val)
+	LogTrace("put room env key=%s", key)
 	room.envs.Store(key, val)
 }
 

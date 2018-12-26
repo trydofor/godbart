@@ -310,14 +310,6 @@ func (m *MyConn) Literal(val interface{}, col string) (string, bool) {
 	}
 }
 
-func fmtTime(t time.Time, f string) string {
-	if len(f) == 0 {
-		return t.Format("2006-01-02 15:04:05.000")
-	} else {
-		return t.Format(f)
-	}
-}
-
 func (m *MyConn) Nothing(val interface{}) bool {
 	if val == nil {
 		return true

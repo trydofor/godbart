@@ -1,22 +1,13 @@
 package art
 
 import (
-	"log"
 	"regexp"
 )
-
-const (
-	SyncTbl = "tbl" // 同步表和索引
-	SyncAll = "all" // 同步说有
-	SyncTrg = "trg" // 同步trigger
-)
-
-var SyncKind = []string{SyncTbl, SyncAll, SyncTrg}
 
 func Sync(srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regexp) error {
 
 	if srce == nil {
-		return errorAndLog("[ERROR] need source db to diff, kind=%s\n", kind)
+		return errorAndLog("need source db to diff, kind=%s", kind)
 	}
 
 	scon, err := openDbAndLog(srce)
@@ -41,7 +32,7 @@ func Sync(srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regex
 			}
 			name = append(name, "table="+v)
 			ddls = append(ddls, ddl)
-			log.Printf("[TRACE] %4d ddl table=%s\n", len(tbls), v)
+			LogTrace("%4d ddl table=%s", len(tbls), v)
 		}
 	}
 
@@ -58,7 +49,7 @@ func Sync(srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regex
 				}
 				name = append(name, "trigger="+k)
 				ddls = append(ddls, ddl)
-				log.Printf("[TRACE] %4d ddl trigger=%s\n", len(tbls), k)
+				LogTrace("%4d ddl trigger=%s", len(tbls), k)
 			}
 		}
 	}
@@ -73,9 +64,9 @@ func Sync(srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regex
 		for i, v := range ddls {
 			_, er := conn.Exec(v)
 			if er != nil {
-				log.Printf("[ERROR] %d/%d failed on db=%s, name=%s, err=%v\n", i+1, cnt, db.Code, name[i], er)
+				LogError("%d/%d failed on db=%s, name=%s, err=%v", i+1, cnt, db.Code, name[i], er)
 			} else {
-				log.Printf("[TRACE] %d/%d done db=%s, name=%s\n", i+1, cnt, db.Code, name[i])
+				LogTrace("%d/%d done db=%s, name=%s", i+1, cnt, db.Code, name[i])
 			}
 		}
 	}

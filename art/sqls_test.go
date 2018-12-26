@@ -1,7 +1,6 @@
 package art
 
 import (
-	"fmt"
 	"io/ioutil"
 	"testing"
 )
@@ -17,17 +16,17 @@ func Test_ParseSql(t *testing.T) {
 
 	sqls := ParseSqls(pref, &FileEntity{file, string(bytes)})
 
-	fmt.Println("segs------")
+	OutTrace("segs------")
 	for _, x := range sqls {
-		fmt.Printf("%#v\n", x)
+		OutTrace("%#v", x)
 	}
 }
 
 func Test_DepairQuote(t *testing.T) {
 
 	q2 := "`'12345'`"
-	fmt.Printf("%s\n", q2)
+	OutTrace("%s", q2)
 
 	cnt := countQuotePair(q2)
-	fmt.Printf("%d\n", cnt)
+	OutTrace("%d", cnt)
 }

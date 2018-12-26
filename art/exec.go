@@ -1,8 +1,6 @@
 package art
 
 import (
-	"fmt"
-	"log"
 	"strings"
 	"sync"
 )
@@ -23,7 +21,7 @@ func Exec(pref *Preference, dest []*DataSource, file []FileEntity, risk bool) er
 		sqls[i] = &sql
 	}
 
-	log.Printf("[TRACE] exec statements, sqls=%d, files=%d\n", stmc, flln)
+	LogTrace("exec statements, sql-count=%d, file-count=%d", stmc, flln)
 
 	// 打开链接
 	wg := &sync.WaitGroup{}
@@ -45,7 +43,7 @@ func Exec(pref *Preference, dest []*DataSource, file []FileEntity, risk bool) er
 			defer wg.Done()
 			for j := 0; j < flln; j++ {
 				pcnt, sqlj := 0, sqls[j]
-				log.Printf("[TRACE] exec db=%s, file=%s\n", con.DbName(), file[j].Path)
+				LogTrace("exec db=%s, file=%s", con.DbName(), file[j].Path)
 
 				for _, sql := range *sqlj {
 					if sql.Exeb {
@@ -76,24 +74,25 @@ func execEach(pref *Preference, sqls *Sqls, conn Conn, cur, cnt int, risk bool) 
 			if !risk {
 				// 不处理 trigger 新结束符问题。
 				if strings.Contains(sql.Text, dlt) {
-					fmt.Printf("\n%s find '%s', May Need '%s' to avoid", cmn, dlt, pref.DelimiterCmd)
+					OutTrace("%s find '%s', May Need '%s' to avoid", cmn, dlt, pref.DelimiterCmd)
 				}
-				fmt.Printf("\n%s db=%s, %d/%d, file=%s ,line=%s\n%s%s\n", cmn, conn.DbName(), cur, cnt, sql.File, sql.Line, sql.Text, dlt)
+				OutTrace("%s db=%s, %3d/%d, id=%3d, line=%s, file=%s", cmn, conn.DbName(), cur, cnt, sql.Head, sql.Line, sql.File)
+				OutDebug("%s%s", sql.Text, dlt)
 				continue
 			}
 
 			a, err := conn.Exec(sql.Text)
 			if err != nil {
-				log.Fatalf("[ERROR] db=%s, %d/%d, failed to exec sql, file=%s, line=%s, err=%v\n", conn.DbName(), cur, cnt, sql.File, sql.Line, err)
+				LogError("db=%s, %3d/%d, failed to exec sql, id=%3d, line=%s, file=%s, err=%v", conn.DbName(), cur, cnt, sql.Head, sql.Line, sql.File, err)
 				break
 			} else {
-				log.Printf("[TRACE] db=%s, %d/%d, %d affects. file=%s, line=%s\n", conn.DbName(), cur, cnt, a, sql.File, sql.Line)
+				LogTrace("db=%s, %d/%d, %d affects. id=%3d, line=%s, file=%s", conn.DbName(), cur, cnt, a, sql.Head, sql.Line, sql.File)
 			}
 		}
 	}
 	if cur != cnt {
-		log.Printf("[TRACE] db=%s, %d/%d, partly done\n\n", conn.DbName(), cur, cnt)
+		LogTrace("db=%s, %d/%d, partly done", conn.DbName(), cur, cnt)
 	} else {
-		log.Printf("[TRACE] db=%s, sqls=%d, whole done\n\n", conn.DbName(), cnt)
+		LogTrace("db=%s, sqls=%d, whole done", conn.DbName(), cnt)
 	}
 }

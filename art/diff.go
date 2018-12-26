@@ -2,16 +2,9 @@ package art
 
 import (
 	"fmt"
-	"log"
 	"regexp"
 	"sort"
 	"strings"
-)
-
-const (
-	DiffTbl = "tbl" // 分别对比`-s`和多个`-d` 间的表名差异
-	DiffAll = "all" // 分别对比`-s`和多个`-d` 间的表明细(column, index,trigger)
-	DiffDdl = "ddl" // 生成多库的创建DDL(table&index，trigger)
 )
 
 type DiffItem struct {
@@ -20,9 +13,11 @@ type DiffItem struct {
 	Triggers map[string]Trg
 }
 
-var DiffKind = []string{DiffTbl, DiffAll, DiffDdl}
-
 func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regexp) error {
+
+	if srce == nil {
+		return errorAndLog("need source db to diff, kind=%s", kind)
+	}
 
 	if kind == DiffDdl {
 		dbs := make([]*DataSource, 0, len(dest)+1)
@@ -30,7 +25,7 @@ func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, r
 		dbs = append(dbs, dest...)
 
 		if len(dbs) == 0 {
-			return errorAndLog("[ERROR] no db to show create")
+			return errorAndLog("no db to show create")
 		}
 
 		for _, db := range dbs {
@@ -41,10 +36,6 @@ func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, r
 			showCreate(pref, conn, rgx)
 		}
 		return nil
-	}
-
-	if srce == nil {
-		return errorAndLog("[ERROR] need source db to diff, kind=%s\n", kind)
 	}
 
 	scon, err := openDbAndLog(srce)
@@ -63,7 +54,7 @@ func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, r
 
 	stbl, sset, err := makeTbname(scon, rgx)
 	if err != nil {
-		log.Fatalf("[ERROR] failed to list tables, db=%s, err=%v\n", scon.DbName(), err)
+		LogError("failed to list tables, db=%s, err=%v", scon.DbName(), err)
 		return err
 	}
 
@@ -73,10 +64,10 @@ func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, r
 	for _, con := range dcon {
 		dtbl, dset, er := makeTbname(con, rgx)
 		if er != nil {
-			log.Fatalf("[ERROR] failed to list tables, db=%s, err=%v\n", con.DbName(), er)
+			LogError("failed to list tables, db=%s, err=%v", con.DbName(), er)
 			return er
 		}
-		log.Printf("[TRACE] === diff tbname ===, left=%s, right=%s\n", scon.DbName(), con.DbName())
+		LogTrace("=== diff tbname ===, left=%s, right=%s", scon.DbName(), con.DbName())
 
 		rep, ch := strings.Builder{}, true
 		var ih []string
@@ -107,7 +98,7 @@ func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, r
 		}
 
 		if detail {
-			log.Printf("[TRACE] === diff detail ===, left=%s, right=%s\n", scon.DbName(), con.DbName())
+			LogTrace("=== diff detail ===, left=%s, right=%s", scon.DbName(), con.DbName())
 
 			e1 := makeDetail(scon, ih, sdtl) // 比较多库，逐步添加表
 			if e1 != nil {
@@ -124,10 +115,10 @@ func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, r
 		}
 
 		if rep.Len() > 0 {
-			log.Printf("[TRACE] == HAS SOME DIFF ==. LEFT=%s, RIGHT=%s\n", scon.DbName(), con.DbName())
-			fmt.Println(rep.String())
+			LogTrace("== HAS SOME DIFF ==. LEFT=%s, RIGHT=%s", scon.DbName(), con.DbName())
+			OutTrace(rep.String())
 		} else {
-			log.Printf("[TRACE] == ALL THE SAME ==. LEFT=%s, RIGHT=%s\n", scon.DbName(), con.DbName())
+			LogTrace("== ALL THE SAME ==. LEFT=%s, RIGHT=%s", scon.DbName(), con.DbName())
 		}
 	}
 
@@ -140,18 +131,18 @@ func makeDetail(con *MyConn, tbl []string, dtl map[string]DiffItem) error {
 		if !ok {
 			cls, err := con.Columns(t)
 			if err != nil {
-				log.Fatalf("[ERROR] failed to list columns, table=%s, db=%s, err=%v\n", t, con.DbName(), err)
+				LogError("failed to list columns, table=%s, db=%s, err=%v", t, con.DbName(), err)
 				return err
 			}
 			ixs, err := con.Indexes(t)
 			if err != nil {
-				log.Fatalf("[ERROR] failed to list indexes, table=%s, db=%s, err=%v\n", t, con.DbName(), err)
+				LogError("failed to list indexes, table=%s, db=%s, err=%v", t, con.DbName(), err)
 				return err
 			}
 
 			tgs, err := con.Triggers(t)
 			if err != nil {
-				log.Fatalf("[ERROR] failed to list triggers, table=%s, db=%s, err=%v\n", t, con.DbName(), err)
+				LogError("failed to list triggers, table=%s, db=%s, err=%v", t, con.DbName(), err)
 				return err
 			}
 
@@ -467,7 +458,7 @@ func showCreate(pref *Preference, conn *MyConn, rgx []*regexp.Regexp) {
 	}
 
 	if len(tbs) == 0 {
-		log.Printf("[TRACE] no tables on db=%s, err=%v\n", conn.DbName(), err)
+		LogTrace("no tables on db=%s, err=%v", conn.DbName(), err)
 		return
 	}
 
@@ -475,26 +466,26 @@ func showCreate(pref *Preference, conn *MyConn, rgx []*regexp.Regexp) {
 
 	c := len(tbs)
 	for i, v := range tbs {
-		log.Printf("[TRACE] db=%s, %d/%d, table=%s\n", conn.DbName(), i+1, c, v)
+		LogTrace("db=%s, %d/%d, table=%s", conn.DbName(), i+1, c, v)
 		tb, e := conn.DdlTable(v)
 		if e != nil {
-			log.Fatalf("[ERROR] db=%s, failed to dll table=%s\n", conn.DbName(), v)
+			LogError("db=%s, failed to dll table=%s", conn.DbName(), v)
 		} else {
 			ddl := fmt.Sprintf("DROP TABLE IF EXISTS `%s`%s\n%s%s\n", v, pref.DelimiterRaw, tb, pref.DelimiterRaw)
-			fmt.Printf("\n%s db=%s, %d/%d, table=%s\n%s", pref.LineComment, conn.DbName(), i+1, c, v, ddl)
+			OutTrace("%s db=%s, %d/%d, table=%s\n%s", pref.LineComment, conn.DbName(), i+1, c, v, ddl)
 		}
 
 		tgs, e := conn.Triggers(v)
 		if e != nil {
-			log.Fatalf("[ERROR] db=%s, failed to get triggers=%s\n", conn.DbName(), v)
+			LogError("db=%s, failed to get triggers=%s", conn.DbName(), v)
 		} else {
 			for _, g := range tgs {
 				tg, r := conn.DdlTrigger(g.Name)
 				if r != nil {
-					log.Fatalf("[ERROR] db=%s, failed to ddl trigger=%s, table=%s\n", conn.DbName(), g.Name, v)
+					LogError("db=%s, failed to ddl trigger=%s, table=%s", conn.DbName(), g.Name, v)
 				} else {
 					ddl := fmt.Sprintf("DROP TRIGGER IF EXISTS `%s` %s\n%s $$\n%s $$\n%s %s\n", g.Name, pref.DelimiterRaw, pref.DelimiterCmd, tg, pref.DelimiterCmd, pref.DelimiterRaw)
-					fmt.Printf("\n%s db=%s, trigger=%s, table=%s\n%s", pref.LineComment, conn.DbName(), g.Name, v, ddl)
+					OutTrace("%s db=%s, trigger=%s, table=%s\n%s", pref.LineComment, conn.DbName(), g.Name, v, ddl)
 				}
 			}
 		}
@@ -508,7 +499,7 @@ func listTable(conn *MyConn, rgx []*regexp.Regexp) (rst []string, err error) {
 	var tbs []string
 	tbs, err = conn.Tables()
 	if err != nil {
-		log.Fatalf("[ERROR] failed to show tables db=%s, err=%v\n", conn.DbName(), err)
+		LogError("failed to show tables db=%s, err=%v", conn.DbName(), err)
 		return
 	}
 
