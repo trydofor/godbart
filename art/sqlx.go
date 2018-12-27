@@ -9,6 +9,9 @@ import (
 
 const (
 	//
+	magicA9 = ">a9+j7"
+	magicJ7 = "@"
+	//
 	CmndEnv = "ENV"
 	CmndRef = "REF"
 	CmndStr = "STR"
@@ -28,7 +31,7 @@ var paraWgt = []string{ParaOne, ParaFor, ParaEnd} // `REF`<`ONE`<`FOR`<`END`
 var argsReg = regexp.MustCompile(`(?i)` + // 不区分大小写
 	`^[^0-9A-Z]*` + // 非英数开头，视为注释部分
 	`(` + strings.Join(cmdArrs, "|") + `)[ \t]+` + //命令和空白，第一分组，固定值
-	"([^`'\" \t]+|'[^']+'|\"[^\"]+\"|`[^`]+`)[ \t]+" + // 变量和空白，第二分组，
+	"([^`'\" \t]+|'[^']+'|\"[^\"]+\"|`+[^`]+`+)[ \t]+" + // 变量和空白，第二分组，
 	"([^`'\" \t]+|'[^']+'|\"[^\"]+\"|`[^`]+`)") // 连续的非引号空白或，引号成对括起来的字符串（贪婪）
 
 type SqlExe struct {
@@ -135,11 +138,17 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 						switch gx.Type {
 						case CmndEnv:
 							if ev, kx := envs[gx.Para]; !kx {
-								if rule == EnvRuleError {
-									return nil, errorAndLog("ENV not found. para=%s, line=%d, file=%s", gx.Para, gx.Head, seg.File)
-								} else {
-									envx[gx.Hold] = ""
-									logDebug("checked def ENV, set Empty, Arg's line=%d, para=%s", gx.Head, gx.Para)
+								// 执行ENV
+								if qc := countQuotePair(gx.Para); qc > 0 {
+									envx[gx.Hold] = fmt.Sprintf("%s%s%d%s%s", magicA9, magicJ7, qc, magicJ7, gx.Para)
+									logDebug("got runtime ENV, Arg's line=%d, para=%s", gx.Head, gx.Para)
+								}else {
+									if rule == EnvRuleError {
+										return nil, errorAndLog("ENV not found. para=%s, line=%d, file=%s", gx.Para, gx.Head, seg.File)
+									} else {
+										envx[gx.Hold] = ""
+										logDebug("checked def ENV, set Empty, Arg's line=%d, para=%s", gx.Head, gx.Para)
+									}
 								}
 							} else {
 								envx[gx.Hold] = ev
@@ -172,15 +181,19 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 								if rg.Type == CmndEnv { // 重定义的ENV
 									if ev, kx := envs[rg.Para]; kx {
 										envx[gx.Hold] = ev
-										logDebug("checked STR redef ENV, Arg's line=%d, para=%s, env=%s", gx.Head, rg.Para, ev)
+										logDebug("checked STR redefine ENV, Arg's line=%d, para=%s, env=%s", gx.Head, rg.Para, ev)
 									} else {
-										if rule == EnvRuleError {
-											return nil, errorAndLog("STR redefine ENV not found. para=%s, line=%d, file=%s", gx.Para, gx.Head, seg.File)
-										} else {
-											envx[rg.Para] = ""
-											logDebug("checked STR redefine ENV, set Empty, Arg's line=%d, para=%s", gx.Head, gx.Para)
+										if qc := countQuotePair(rg.Para); qc > 0 {
+											envx[gx.Hold] = fmt.Sprintf("%s%s%d%s%s", magicA9, magicJ7, qc, magicJ7, rg.Para)
+											logDebug("checked STR redefine runtime ENV, Arg's line=%d, para=%s", gx.Head, gx.Para)
+										}else {
+											if rule == EnvRuleError {
+												return nil, errorAndLog("STR redefine ENV not found. para=%s, line=%d, file=%s", gx.Para, gx.Head, seg.File)
+											} else {
+												envx[gx.Hold] = ""
+												logDebug("checked STR redefine ENV, set Empty, Arg's line=%d, para=%s", gx.Head, gx.Para)
+											}
 										}
-
 									}
 								} else { // REF
 									if ex, kx := holdExe[gx.Para]; kx {
@@ -411,7 +424,8 @@ func parseArgs(text string, h int) (args []*Arg) {
 			if cmd == CmndRun || cmd == CmndOut {
 				sm[2] = strings.ToUpper(sm[2]) // 命令变量大写
 			} else if cmd == CmndRef || cmd == CmndEnv {
-				if cp := countQuotePair(sm[2]); cp > 0 { //脱去变量最外层引号
+				//脱去变量最外层引号，SQL会保留至少一个反单引号
+				if cp := countQuotePair(sm[2]); cp > 0 {
 					sm[2] = sm[2][1 : len(sm[2])-1]
 				}
 			} else if cmd == CmndStr { // 相同才脱引号

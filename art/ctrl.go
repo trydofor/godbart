@@ -357,23 +357,30 @@ func (room *Room) dealJobx(job *CtrlJob, args ... interface{}) {
 
 	switch room.name {
 	case CtrlRoomTree:
-		v1, ok := room.envs.Load(roomTreeEnvSqlx)
-		if !ok {
-			room.echo <- "can not find current sqlx"
-			return
-		}
 
-		sqlx := v1.(*SqlExe)
 		if strings.HasSuffix(job.cmnd, roomTreeSqlx) {
+			v1, ok := room.envs.Load(roomTreeEnvSqlx)
+			if !ok {
+				room.echo <- "can not find current sqlx"
+				return
+			}
+
+			sqlx := v1.(*SqlExe)
 			var sb strings.Builder
 			for _, x := range sqlx.Exes {
 				sb.WriteString(x.Tree())
 			}
-			room.echo <- sb.String()
+			text := sb.String()
+
+			room.echo <- text
 			return
 		}
 
-		headRun, headArg := args[0].(int), -1
+		headRun, headArg := -1, -1
+		if len(args) > 0 {
+			headRun = args[0].(int)
+		}
+
 		part := strings.SplitN(job.cmnd, " ", 2)
 		if len(part) > 1 {
 			hd, er := strconv.ParseInt(part[1], 10, 32)
@@ -381,10 +388,6 @@ func (room *Room) dealJobx(job *CtrlJob, args ... interface{}) {
 				return
 			}
 			headArg = int(hd)
-
-			if len(args) < 1 {
-				return
-			}
 		}
 
 		LogTrace("at=%d, job=%v", headRun, job)

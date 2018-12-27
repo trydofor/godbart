@@ -32,6 +32,7 @@
 |      |      |-(1:N)-历史变更(tx_parcel$log)
 ```
 就可以形成以`收件人`为根的树，或从`包裹`为根的树。
+对于非单继承（多个父节点）的数据结构，有多重循环时会存在问题。
 
 ## 1. 场景举例
 
@@ -40,6 +41,8 @@
  * ubuntu 16.04 
  * Go 1.11.2
  * MySQL (5.7.23)
+ 
+下列各命令的参数，大部分时通用的，所以举例中不重复介绍各参数。
 
 ### 1.1. 执行脚本 Exec
 
@@ -52,6 +55,7 @@
  -d prd_main \
  -d prd_2018 \
  -x .sql -x .xsql \
+ -t trace \
  demo/sql/init/
 ```
 
@@ -60,6 +64,7 @@
  * `-c` 必填，配置文件位置。
  * `-d` 必填，目标数据库，可以指定多个。
  * `-x` 选填，SQL文件后缀，不区分大小写。
+ * `-t` 选填，通过修改输出级别，调整信息量。
  * `--agree` 选填，风险自负，真正执行。
 
 ### 1.2. 版本管理 Revi
@@ -124,17 +129,8 @@ REPLACE INTO sys_schema_version (version, created) VALUES( 2018022801, NOW());
 
 用来对比结构差异，也能生成创建的SQL(DDL)，支持table&index，trigger。
 
-过程信息使用log在stderr(`2`)输出。结果信息在stdout(`1`)输出。
 对比结果中，用`>`表示只有左侧存在，`<`表示只有右侧存在。
-
-通过`SHELL`特性，可以用以下方式分离信息。
-
- * `> main-2018-diff-out.log` 结果直接保存文件，控制台不输出。
- * `2> main-2018-diff-err.log` 过程保存文件，控制台不输出。
- * `&> main-2018-diff-all.log` 全部保存文件，控制台不输出。
- * `| tee main-2018-diff-out.log` 结果保存文件，且控制台输出。
- * `2>&1| tee >(grep -vE '^[0-9]{4}' > main-2018-diff-out.log)` 同上。
- * `2>&1| tee main-2018-diff-all.log` 全部保存文件，且控制台输出。
+过程信息以log输出。结果信息fmt输出，可通过`SHELL`特性分离信息。
 
 ```bash
 # 对表名，字段，索引，触发器都进行比较，并保存结果到 main-2018-diff-out.log
@@ -334,6 +330,10 @@ stop
  - `DATE`，当前日时(yyyy-mm-dd HH:MM:ss)
  - `ENV-CHECK-RULE`，ENV检查规则，默认`ERROR`：报错；`EMPTY`：置空；
 
+当`变量`被`1个以上`的`反单引号`包围时，表示此`ENV`通过运行`SQL`获得，
+是第一条记录的第一个字段。优点是不会被纳入数据树，缺点是不享受SQL高亮，
+不能替换其他占位。
+
 如下SQL，定义环境变量`DATE_FROM`，其占位符`'2018-11-23 12:34:56'` ，
 需要通过系统环境变量获得，如果不存在（默认ERROR）则会报错。
 
@@ -341,6 +341,8 @@ stop
 是采用PreparedStatement的动态形式，可避免SQL转义或注入，提高运行时性能。
 
 ```mysql
+-- ENV ``SELECT NOW();`` sql_now  运行时赋值
+
 -- ENV DATE_FROM '2018-11-23 12:34:56'
 SELECT * FROM tx_parcel WHERE create_time = '2018-11-23 12:34:56';
 
@@ -678,7 +680,73 @@ cat /tmp/tree-main-2018-all.sql \
 2>&1| tee /tmp/tree-main-2018-all.log
 ```
 
-## 4. 不想理你的问题
+## 4. 实用小技巧
+
+数据的日常处理，会有很多技巧，能提高数据意识，培养直觉。
+
+### 4.1. SHELL分离信息
+
+过程信息以log在stderr(`2`)输出。结果信息以stdout(`1`)输出，
+`1`和`2`是描述符，`>`表重定向，`&`表合并，组合起来可分离信息。
+
+ * `> main-2018-diff-out.log` 结果直接保存文件，控制台不输出。
+ * `2> main-2018-diff-err.log` 过程保存文件，控制台不输出。
+ * `&> main-2018-diff-all.log` 全部保存文件，控制台不输出。
+ * `| tee main-2018-diff-out.log` 结果保存文件，且控制台输出。
+ * `2>&1| tee >(grep -vE '^[0-9]{4}' > main-2018-diff-out.log)` 同上。
+ * `2>&1| tee main-2018-diff-all.log` 全部保存文件，且控制台输出。
+
+### 4.2. 按数据量排序
+
+查询所有表的记录数，对于单表300万的数据，进行按树分离或清理。
+
+```mysql
+-- 按记录数排序，同时查看磁盘空间
+SELECT 
+    TABLE_NAME,
+    TABLE_ROWS,
+    FLOOR(DATA_LENGTH  / 1048576) AS DATA_M,
+    FLOOR(INDEX_LENGTH / 1048576) AS INDEX_M
+FROM
+    INFORMATION_SCHEMA.TABLES
+WHERE
+    TABLE_SCHEMA = 'godbart_prd_main'
+ORDER BY 
+    TABLE_ROWS DESC, 
+    DATA_M DESC;
+```
+
+### 4.3. 调整分叉
+
+多分支的`REF`会生成多个分叉的节点，可以通过`FOR`和`END`调整。
+
+而依赖与多个条件的`WHERE`，可`JOIN`到同一个分叉SQL中。
+
+以 `./demo/sql/tree/fork.sql` 为例。
+
+### 4.4. REF的默认值
+
+当REF的SQL返回的0条记录时，以此为根的树就不会存在。
+我们可以通过以下的SQL来指定默认值，保证能返回1条记录。
+
+```mysql
+-- 通过 INSERT IGNORE 插入默认值
+INSERT IGNORE SYS_HOT_SEPARATION VALUES ('TX_PARCEL',0, NOW());
+
+
+-- 通过 聚会函数与CASE WEN
+SELECT 
+    CASE
+        WHEN MAX(CHECKED_ID) IS NULL THEN 0
+        ELSE MAX(CHECKED_ID)
+    END AS CHECKED_ID
+FROM
+    SYS_HOT_SEPARATION
+WHERE
+    TABLE_NAME = 'TX_PARCEL';
+```
+
+## 5. 不想理你的问题
 
 * Q01：使用中发现了问题，出现了BUG怎么办？
   - 有能力hack code的，就提交PR。

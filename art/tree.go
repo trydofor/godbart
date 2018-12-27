@@ -55,12 +55,80 @@ func ParseTree(pref *Preference, envs map[string]string, file []FileEntity) ([]*
 	return sqlx, nil
 }
 
+func stmtEnv(v string, src *MyConn, tmp map[string]string) (rst string, has bool, err error) {
+	if !strings.HasPrefix(v, magicA9) {
+		return
+	}
+
+	if sv, ho := tmp[v]; ho {
+		return sv, true, nil
+	}
+
+	ptn := strings.SplitN(v, magicJ7, 3)
+	if len(ptn) == 3 && ptn[0] == magicA9 {
+		cnt, er := strconv.ParseInt(ptn[1], 10, 32)
+		if er != nil {
+			return
+		}
+
+		qc := countQuotePair(ptn[2]);
+		if qc != int(cnt) {
+			return
+		}
+
+		stm := ptn[2][qc : len(ptn[2])-qc]
+		logDebug("deal runtime Env, exec sql=%s", stm)
+		err = src.Query(func(row *sql.Rows) error {
+			cols, er := row.ColumnTypes()
+			if er != nil {
+				return errorAndLog("failed to exe env, v=%s, er=%v", v, er)
+			}
+
+			ln := len(cols)
+			vals := make([]interface{}, ln)
+			ptrs := make([]interface{}, ln)
+			for i := 0; i < ln; i++ {
+				ptrs[i] = &vals[i]
+			}
+
+			if row.Next() {
+				row.Scan(ptrs...)
+				str, _ := src.Literal(vals[0], cols[0].DatabaseTypeName())
+				rst = str
+				tmp[v] = str
+				has = true
+			}
+
+			return nil
+		}, stm)
+
+		if err != nil {
+			return
+		}
+
+		if !has {
+			err = errorAndLog("failed to exe env sql, v=%s", v)
+		}
+	}
+	return
+}
+
 func RunSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, risk bool) error {
 
 	ctx := make(map[string]interface{}) // 存放select的REF
 
+	tmp := make(map[string]string)
 	for k, v := range sqlx.Envs {
-		ctx[k] = v
+		r, h, e := stmtEnv(v, src, tmp);
+		if e != nil {
+			return e
+		}
+		if h {
+			logDebug("put runtime Env, hld=%s, val=%s", k, r)
+			ctx[k] = r
+		} else {
+			ctx[k] = v
+		}
 	}
 
 	ncm, lcm, dlt := "\n"+pref.LineComment+" ", pref.LineComment, pref.DelimiterRaw
@@ -235,7 +303,7 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 					if !shouldForAct(son, cnt) {
 						continue
 					}
-					LogTrace("fork ONE/FOR child=%d, parent=%d", son.Seg.Head, head)
+					LogTrace("fork ONE/FOR child=%d, parent=%d, lvl=%d", son.Seg.Head, head, lvl+1)
 					er := runExe(son, src, dst, ctx, outf, risk, lvl+1)
 					if er != nil {
 						return er
@@ -253,15 +321,15 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 					if !shouldEndAct(son, cnt) {
 						continue
 					}
-					LogTrace("fork END child=%d, parent=%d", son.Seg.Head, head)
-					er := runExe(son, src, dst, ctx, outf, risk,lvl+1)
+					LogTrace("fork END child=%d, parent=%d, lvl=%d", son.Seg.Head, head, lvl+1)
+					er := runExe(son, src, dst, ctx, outf, risk, lvl+1)
 					if er != nil {
 						return er
 					}
 				}
 			}
 
-			LogTrace("done %d rows, id=%d, line=%s", cnt, head, line)
+			LogTrace("loop %d rows, id=%d, lvl=%d, line=%s", cnt, head, lvl, line)
 
 			return nil
 		}
@@ -275,23 +343,23 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 		dcnt := len(dst)
 		if risk {
 			if rsrc {
-				LogTrace("running on SRC db=%s", src.DbName())
+				logDebug("running on SRC db=%s", src.DbName())
 				if a, e := src.Exec(stmt, vals...); e != nil {
-					LogError("failed on SRC db=%s, err=%v", src.DbName(), e)
+					LogError("failed on SRC=%s, id=%d, lvl=%d err=%v", src.DbName(), head, lvl, e)
 					return e
 				} else {
-					LogTrace("done %d affected on SRC db=%s", a, src.DbName())
+					LogTrace("affect %d on SRC=%s, id=%d, lvl=%d", a, src.DbName(), head, lvl)
 				}
 			}
 
 			if rout {
 				for i, db := range dst {
-					LogTrace("running on OUT[%d/%d] db=%s", i+1, dcnt, db.DbName())
+					logDebug("running on OUT[%d/%d] db=%s", i+1, dcnt, db.DbName())
 					if a, e := db.Exec(stmt, vals...); e != nil {
-						LogError("failed on OUT[%d/%d] db=%s, err=%v", i+1, dcnt, db.DbName(), e)
+						LogError("failed on [%d/%d]OUT=%s, id=%d, lvl=%d, err=%v", i+1, dcnt, db.DbName(), head, lvl, e)
 						return e
 					} else {
-						LogTrace("done %d affected on OUT[%d/%d] db=%s", a, i+1, dcnt, db.DbName())
+						LogTrace("affect %d on [%d/%d]OUT=%s, id=%d, lvl=%d", a, i+1, dcnt, db.DbName(), head, lvl)
 					}
 				}
 			}
@@ -308,7 +376,7 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 		}
 	}
 
-	LogTrace("done stmt, id=%d, lvl=%d, line=%s\n", head, lvl, line)
+	logDebug("done stmt, id=%d, lvl=%d, line=%s\n", head, lvl, line)
 	return nil
 }
 
