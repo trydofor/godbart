@@ -329,10 +329,12 @@ stop
  - `HOST`，主机名
  - `DATE`，当前日时(yyyy-mm-dd HH:MM:ss)
  - `ENV-CHECK-RULE`，ENV检查规则，默认`ERROR`：报错；`EMPTY`：置空；
+ - `SRC-DB`，当前执行的源DB（只有Tree，且唯一）；
+ - `OUT-DB`，当前执行的目标DB（只有Tree，只有OUT时能确定）；
 
 当`变量`被`1个以上`的`反单引号`包围时，表示此`ENV`通过运行`SQL`获得，
 是第一条记录的第一个字段。优点是不会被纳入数据树，缺点是不享受SQL高亮，
-不能替换其他占位。
+不能替换其他占位。注意 STR不支持这么骚气的操作，因为有模式展开。
 
 如下SQL，定义环境变量`DATE_FROM`，其占位符`'2018-11-23 12:34:56'` ，
 需要通过系统环境变量获得，如果不存在（默认ERROR）则会报错。
@@ -452,6 +454,7 @@ UPDATE tx_parcel SET logno = -99009 WHERE id=990001;
  * `RUN` 可以确定多个父关系，且强于`REF`。
  * `RUN` 在树结束时执行，而`REF`在树中执行。
  * 数据点增序排列，权重为`REF`<`ONE`<`FOR`<`END`，同级时算SQL位置。
+ * 增加`ITSELF`占位，表示单独执行，没有任何依赖。
 
 条件执行的例子，参考 `demo/sql/tree/*.sql`
 
@@ -716,7 +719,7 @@ ORDER BY
     DATA_M DESC;
 ```
 
-### 4.3. 调整分叉
+### 4.3. 调整分叉位置
 
 多分支的`REF`会生成多个分叉的节点，可以通过`FOR`和`END`调整。
 
@@ -731,10 +734,17 @@ ORDER BY
 
 ```mysql
 -- 通过 INSERT IGNORE 插入默认值
-INSERT IGNORE SYS_HOT_SEPARATION VALUES ('TX_PARCEL',0, NOW());
+INSERT IGNORE SYS_HOT_SEPARATION VALUES ('tx_parcel',0, NOW());
 
+-- 批量初始化
+INSERT IGNORE SYS_HOT_SEPARATION SELECT 
+    TABLE_NAME,0,NOW()
+FROM
+    INFORMATION_SCHEMA.TABLES
+WHERE
+    TABLE_SCHEMA = 'godbart_prd_main';
 
--- 通过 聚会函数与CASE WEN
+-- 通过 聚集函数与CASE WEN
 SELECT 
     CASE
         WHEN MAX(CHECKED_ID) IS NULL THEN 0
@@ -743,8 +753,26 @@ SELECT
 FROM
     SYS_HOT_SEPARATION
 WHERE
-    TABLE_NAME = 'TX_PARCEL';
+    TABLE_NAME = 'tx_parcel';
 ```
+
+### 4.５. 全部同步
+
+有些小表或功能表，可以全部同步或备份。
+```mysql
+-- STR OUT-DB OUTDB
+-- REF id 'tx_sender.max_id'
+SELECT MAX(ID) AS MAX_ID FROM TX_SENDER;
+
+-- OUT FOR 'tx_sender.max_id'
+REPLACE INTO OUTDB.TX_SENDER SELECT * FROM TX_SENDER WHERE ID > (
+  SELECT MAX(CHECKED_ID) FROM SYS_HOT_SEPARATION WHERE TABLE_NAME = 'tx_sender'
+);
+
+-- RUN FOR 'tx_sender.max_id'
+REPLACE INTO SYS_HOT_SEPARATION VALUES ('tx_sender', 'tx_sender.max_id', NOW());
+```
+
 
 ## 5. 不想理你的问题
 

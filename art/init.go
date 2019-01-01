@@ -6,6 +6,8 @@ const (
 	LvlError = 100
 
 	//
+	EnvSrcDb     = "SRC-DB"
+	EnvOutDb     = "OUT-DB"
 	EnvUser      = "USER"
 	EnvHost      = "HOST"
 	EnvDate      = "DATE"

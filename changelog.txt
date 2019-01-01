@@ -1,8 +1,11 @@
 v0.9.5
 因kill有点吓人，参数`-k`变为`-t`
 精简输出，增加输出级别 `-l`
-`ENV`中增加SQL运行时变量
+`ENV`中可执行SQL初始变量
+`ENV`中增加内置变量 SRC-DB和OUT-DB
+`RUN|OUT` 增加内置`ITSELF`表示独立执行。
 少量bug修复，代码调整
+修改README
 
 v0.9.4
 #3 从A复制schema到B

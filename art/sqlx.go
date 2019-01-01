@@ -9,8 +9,12 @@ import (
 
 const (
 	//
-	magicA9 = ">a9+j7"
+	magicA9 = ">a9+yeah+j7<ivy"
 	magicJ7 = "@"
+	magicDs = magicA9 + magicJ7 + EnvSrcDb
+	magicDo = magicA9 + magicJ7 + EnvOutDb
+
+	HoldTop = "ITSELF"
 	//
 	CmndEnv = "ENV"
 	CmndRef = "REF"
@@ -137,12 +141,23 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 					for _, gx := range arg {
 						switch gx.Type {
 						case CmndEnv:
-							if ev, kx := envs[gx.Para]; !kx {
+							if ev, kx := envs[gx.Para]; kx {
+								if gx.Para == EnvSrcDb {
+									envx[gx.Hold] = magicDs
+									logDebug("checked runtime ENV, Arg's line=%d, para=%s, env=%s", gx.Head, gx.Para, magicDs)
+								} else if gx.Para == EnvOutDb {
+									envx[gx.Hold] = magicDo
+									logDebug("checked runtime ENV, Arg's line=%d, para=%s, env=%s", gx.Head, gx.Para, magicDo)
+								} else {
+									envx[gx.Hold] = ev
+									logDebug("checked def ENV, Arg's line=%d, para=%s, env=%s", gx.Head, gx.Para, ev)
+								}
+							} else {
 								// 执行ENV
 								if qc := countQuotePair(gx.Para); qc > 0 {
 									envx[gx.Hold] = fmt.Sprintf("%s%s%d%s%s", magicA9, magicJ7, qc, magicJ7, gx.Para)
 									logDebug("got runtime ENV, Arg's line=%d, para=%s", gx.Head, gx.Para)
-								}else {
+								} else {
 									if rule == EnvRuleError {
 										return nil, errorAndLog("ENV not found. para=%s, line=%d, file=%s", gx.Para, gx.Head, seg.File)
 									} else {
@@ -150,9 +165,6 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 										logDebug("checked def ENV, set Empty, Arg's line=%d, para=%s", gx.Head, gx.Para)
 									}
 								}
-							} else {
-								envx[gx.Hold] = ev
-								logDebug("checked def ENV, Arg's line=%d, para=%s, env=%s", gx.Head, gx.Para, ev)
 							}
 						case CmndRef:
 							defs[gx.Hold] = gx.Para
@@ -170,8 +182,16 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 
 							if rg == nil { // 直接定义
 								if ev, kx := envs[gx.Para]; kx { //ENV
-									envx[gx.Hold] = ev
-									logDebug("checked STR def ENV, Arg's line=%d, para=%s, env=%s", gx.Head, gx.Para, ev)
+									if gx.Para == EnvSrcDb {
+										envx[gx.Hold] = magicDs
+										logDebug("checked runtime STR def ENV, Arg's line=%d, para=%s, env=%s", gx.Head, gx.Para, magicDs)
+									} else if gx.Para == EnvOutDb {
+										envx[gx.Hold] = magicDo
+										logDebug("checked runtime STR def ENV, Arg's line=%d, para=%s, env=%s", gx.Head, gx.Para, magicDo)
+									} else {
+										envx[gx.Hold] = ev
+										logDebug("checked STR def ENV, Arg's line=%d, para=%s, env=%s", gx.Head, gx.Para, ev)
+									}
 								} else { // REF
 									holdExe[gx.Hold] = exe
 									defs[gx.Hold] = gx.Para
@@ -184,9 +204,9 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 										logDebug("checked STR redefine ENV, Arg's line=%d, para=%s, env=%s", gx.Head, rg.Para, ev)
 									} else {
 										if qc := countQuotePair(rg.Para); qc > 0 {
-											envx[gx.Hold] = fmt.Sprintf("%s%s%d%s%s", magicA9, magicJ7, qc, magicJ7, rg.Para)
+											envx[gx.Hold] = envx[rg.Hold]
 											logDebug("checked STR redefine runtime ENV, Arg's line=%d, para=%s", gx.Head, gx.Para)
-										}else {
+										} else {
 											if rule == EnvRuleError {
 												return nil, errorAndLog("STR redefine ENV not found. para=%s, line=%d, file=%s", gx.Para, gx.Head, seg.File)
 											} else {
@@ -248,12 +268,14 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 		for _, v := range exe.Acts {
 			if pa, ok := holdExe[v.Hold]; ok {
 				sonFunc(pa, exe, &top)
-				logDebug("find %s parent, hold=%s, parent=%s, child=%s", v.Type, v.Hold, pa.Seg.Line, exe.Seg.Line)
+				logDebug("bind %s parent, hold=%s, parent=%s, child=%s", v.Type, v.Hold, pa.Seg.Line, exe.Seg.Line)
 				continue
 			}
 
 			if v.Para == ParaHas || v.Para == ParaNot {
-				// not check
+				logDebug("skip parent, %s. line=%s", v.Type, exe.Seg.Line)
+			} else if  v.Hold == HoldTop {
+				logDebug("bind parent to ITSELF , %s. line=%s", v.Type, exe.Seg.Line)
 			} else {
 				return nil, errorAndLog("%s HOLD's REF not found, hold=%s, line=%d, file=%s", v.Type, v.Hold, v.Head, seg.File)
 			}
@@ -264,7 +286,7 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 				pa, ok := holdExe[v.Str]
 				if ok { // REF|STR HOLD
 					sonFunc(pa, exe, &top)
-					logDebug("find DEP parent, hold=%s, parent=%s, child=%s", v.Str, pa.Seg.Line, exe.Seg.Line)
+					logDebug("bind DEP parent, hold=%s, parent=%s, child=%s", v.Str, pa.Seg.Line, exe.Seg.Line)
 				}
 			}
 		}

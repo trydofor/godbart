@@ -10,5 +10,5 @@ func Test_Tree(t *testing.T) {
 	envs[EnvRule] = EnvRuleEmpty
 	BuiltinEnvs(envs)
 	file := makeFileEntity("../demo/sql/tree/test.sql")
-	Tree(pref, envs, dsrc, dsts, file, false)
+	Tree(pref, envs, dsrc, dstt, file, false)
 }

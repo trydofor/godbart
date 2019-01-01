@@ -1,64 +1,64 @@
--- ENV DATE_FROM '1970-01-01 01:01:01'  #定义环境变量
--- STR '1970-01-01 01:01:01' $DATE_FROM #重定义，静态替换
+-- ENV DATE_FROM 'ENV_DATE_FROM'  #定义环境变量
+-- STR 'ENV_DATE_FROM' $DATE_FROM #重定义，静态替换
 
--- REF id 9997770001001  #提取 id，作为9997770001001节点
--- REF recver_id 9997770001002 # 999777前缀，0001第一个SELECT，002，第二个REF
--- REF track_num '9997770001003' #提取 id，作为9997770001003节点
--- REF `中文字段` '9997770001004' #假设存在，不存在且没引用不报错。
--- STR VAL[] '$VAL*_9997770001005'
-SELECT * FROM tx_parcel WHERE create_time <= '1970-01-01 01:01:01';
+-- REF id 'tx_parcel.id'  #提取 id，作为'tx_parcel.id'节点
+-- REF recver_id 'tx_parcel.recver_id' # 999777前缀，0001第一个SELECT，002，第二个REF
+-- REF track_num ''tx_parcel.track_num'' #提取 id，作为'tx_parcel.track_num'节点
+-- REF `中文字段` ''tx_parcel.chinese-404'' #假设存在，不存在且没引用不报错。
+-- STR VAL[] 'tx_parcel.VALS'
+SELECT * FROM tx_parcel WHERE create_time <= 'ENV_DATE_FROM';
 
--- OUT FOR 9997770001001
-REPLACE INTO tx_parcel VALUES ('$VAL*_9997770001005');
+-- OUT FOR 'tx_parcel.id'
+REPLACE INTO tx_parcel VALUES ('tx_parcel.VALS');
 
--- RUN FOR 9997770001001 # 需要使用 RUN FOR，否则会按顺序立即执行。
-DELETE FROM tx_parcel where id = 9997770001001;
-
-
--- REF id 9997770002001 #提取id，作为9997770002001节点，父节点为9997770001003
--- STR '9997770001003' $TRK
--- STR VAL[] '$VAL*_9997770002002'
-SELECT * FROM tx_track WHERE track_num = '9997770001003';
-
--- OUT FOR 9997770002001
-REPLACE INTO tx_track VALUES ('$VAL*_9997770002002');
-
--- RUN END 9997770002001
-DELETE FROM tx_track where id = 9997770002001;
+-- RUN FOR 'tx_parcel.id' # 需要使用 RUN FOR，否则会按顺序立即执行。
+DELETE FROM tx_parcel where id = 'tx_parcel.id';
 
 
--- REF id 9997770003001 #提取id，作为9997770003001节点，父节点为9997770001001
--- STR VAL[] '$VAL*_9997770003002'
-SELECT * FROM tx_parcel_event WHERE parcel_id = 9997770001001;
+-- REF id 'tx_track.id' #提取id，作为'tx_track.id'节点，父节点为'tx_parcel.track_num'
+-- STR ''tx_parcel.track_num'' $TRK
+-- STR VAL[] 'tx_track.VALS'
+SELECT * FROM tx_track WHERE track_num = ''tx_parcel.track_num'';
 
--- OUT FOR 9997770003001
-INSERT INTO tx_parcel_event VALUES ('$VAL*_9997770003002')
-  ON DUPLICATE KEY UPDATE modify_time = '1970-01-01 01:01:01';
+-- OUT FOR 'tx_track.id'
+REPLACE INTO tx_track VALUES ('tx_track.VALS');
 
--- RUN END 9997770003001
-DELETE FROM tx_parcel_event where parcel_id = 9997770003001;
+-- RUN END 'tx_track.id'
+DELETE FROM tx_track where id = 'tx_track.id';
 
 
--- REF id 9997770004001
+-- REF id 'tx_parcel_event.id' #提取id，作为'tx_parcel_event.id'节点，父节点为'tx_parcel.id'
+-- STR VAL[] 'tx_parcel_event.VALS'
+SELECT * FROM tx_parcel_event WHERE parcel_id = 'tx_parcel.id';
+
+-- OUT FOR 'tx_parcel_event.id'
+INSERT INTO tx_parcel_event VALUES ('tx_parcel_event.VALS')
+  ON DUPLICATE KEY UPDATE modify_time = 'ENV_DATE_FROM';
+
+-- RUN END 'tx_parcel_event.id'
+DELETE FROM tx_parcel_event where parcel_id = 'tx_parcel_event.id';
+
+
+-- REF id 'tx_receiver.id'
 -- STR `COL[]` `$COLX_9997770004002` # 加引号规则，建议使用SQL合规字符
--- STR VAL[,] '$VALX_9997770004002'
-SELECT * FROM tx_receiver WHERE id = 9997770001002;
+-- STR VAL[,] 'tx_receiver.VALS'
+SELECT * FROM tx_receiver WHERE id = 'tx_parcel.recver_id';
 
--- OUT FOR 9997770004001
-REPLACE INTO tx_receiver ($COLX_9997770004002) VALUES ('$VALX_9997770004002');
+-- OUT FOR 'tx_receiver.id'
+REPLACE INTO tx_receiver ($COLX_9997770004002) VALUES ('tx_receiver.VALS');
 
--- RUN END 9997770004001
-DELETE FROM tx_receiver where id = 9997770004001;
+-- RUN END 'tx_receiver.id'
+DELETE FROM tx_receiver where id = 'tx_receiver.id';
 
 
--- RUN END 9997770003001
-REPLACE INTO sys_hot_separation(table_name, checked_id, checked_tm) VALUES ('tx_parcel_event', 9997770003001, now()); -- 单行注释
+-- RUN END 'tx_parcel_event.id'
+REPLACE INTO sys_hot_separation(table_name, checked_id, checked_tm) VALUES ('tx_parcel_event', 'tx_parcel_event.id', now()); -- 单行注释
 
--- RUN END 9997770002001
-REPLACE INTO sys_hot_separation(table_name, checked_id, checked_tm) VALUES ('tx_track', /*内嵌多行注释*/ 9997770002001, now());
+-- RUN END 'tx_track.id'
+REPLACE INTO sys_hot_separation(table_name, checked_id, checked_tm) VALUES ('tx_track', /*内嵌多行注释*/ 'tx_track.id', now());
 
--- RUN END 9997770001001
-REPLACE INTO sys_hot_separation(table_name, checked_id, checked_tm) VALUES ('tx_parcel', 9997770001001, now());
+-- RUN END 'tx_parcel.id'
+REPLACE INTO sys_hot_separation(table_name, checked_id, checked_tm) VALUES ('tx_parcel', 'tx_parcel.id', now());
 
--- RUN END 9997770001001 #存在9997770001001节点时执行，即9997770001001不为空
-DELETE FROM tx_parcel$log WHERE create_time <= '1970-01-01 01:01:01';
+-- RUN END 'tx_parcel.id' #存在'tx_parcel.id'节点时执行，即'tx_parcel.id'不为空
+DELETE FROM tx_parcel$log WHERE create_time <= 'ENV_DATE_FROM';

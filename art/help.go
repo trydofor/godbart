@@ -124,6 +124,9 @@ func BuiltinEnvs(envs map[string]string) {
 			ExitIfTrue(true, -4, "unsupport env, key=%s, value=%s", EnvRule, rl)
 		}
 	}
+
+	envs[EnvSrcDb] = "UN-SET"
+	envs[EnvOutDb] = "UN-SET"
 }
 
 func FileWalker(path []string, flag []string) ([]FileEntity, error) {

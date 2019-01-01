@@ -201,7 +201,19 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 		return err
 	}
 
-	// \n-- 前缀
+	// 运行时变量 "SRC-DBNAME"
+	dbsName := src.DbName()
+	stmt = strings.Replace(stmt, magicDs, dbsName, -1)
+	prnt = strings.Replace(prnt, magicDs, dbsName, -1)
+
+	var valOnv []int
+	for i := 0; i < len(vals); i++ {
+		if vals[i] == magicDs {
+			vals[i] = dbsName
+		} else if vals[i] == magicDo {
+			valOnv = append(valOnv, i)
+		}
+	}
 
 	outf(exe, prnt, true)
 	outf(exe, prnt, false)
@@ -343,34 +355,48 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 		dcnt := len(dst)
 		if risk {
 			if rsrc {
-				logDebug("running on SRC db=%s", src.DbName())
+				logDebug("running on SRC db=%s", dbsName)
 				if a, e := src.Exec(stmt, vals...); e != nil {
-					LogError("failed on SRC=%s, id=%d, lvl=%d err=%v", src.DbName(), head, lvl, e)
+					LogError("failed on SRC=%s, id=%d, lvl=%d err=%v", dbsName, head, lvl, e)
 					return e
 				} else {
-					LogTrace("affect %d on SRC=%s, id=%d, lvl=%d", a, src.DbName(), head, lvl)
+					LogTrace("affect %d on SRC=%s, id=%d, lvl=%d", a, dbsName, head, lvl)
 				}
 			}
 
 			if rout {
 				for i, db := range dst {
-					logDebug("running on OUT[%d/%d] db=%s", i+1, dcnt, db.DbName())
-					if a, e := db.Exec(stmt, vals...); e != nil {
-						LogError("failed on [%d/%d]OUT=%s, id=%d, lvl=%d, err=%v", i+1, dcnt, db.DbName(), head, lvl, e)
+					dboName := db.DbName()
+					otmt := strings.Replace(stmt, magicDo, dboName, -1);
+					for _, d := range valOnv {
+						logDebug("replace out-db at %d with %s", d, dboName)
+						vals[d] = dboName
+					}
+					logDebug("running on OUT[%d/%d] db=%s", i+1, dcnt, dboName)
+					if a, e := db.Exec(otmt, vals...); e != nil {
+						LogError("failed on [%d/%d]OUT=%s, id=%d, lvl=%d, err=%v", i+1, dcnt, dboName, head, lvl, e)
 						return e
 					} else {
-						LogTrace("affect %d on [%d/%d]OUT=%s, id=%d, lvl=%d", a, i+1, dcnt, db.DbName(), head, lvl)
+						LogTrace("affect %d on [%d/%d]OUT=%s, id=%d, lvl=%d", a, i+1, dcnt, dboName, head, lvl)
 					}
 				}
 			}
 		} else {
 			if rsrc {
-				LogTrace("fake run on SRC db=%s", src.DbName())
+				LogTrace("fake run on SRC db=%s", dbsName)
 			}
 
 			if rout {
+				hevo := strings.Contains(stmt, magicDo)
 				for i, db := range dst {
-					LogTrace("fake run on OUT[%d/%d] db=%s", i+1, dcnt, db.DbName())
+					odn := db.DbName()
+					for _, d := range valOnv {
+						LogTrace("replace OUT-DB at index=%d with %s", d+1, odn)
+					}
+					LogTrace("fake run on OUT[%d/%d] db=%s", i+1, dcnt, odn)
+					if hevo {
+						LogTrace("replace runtime ENV. stmt=%s", strings.Replace(stmt, magicDo, odn, -1))
+					}
 				}
 			}
 		}
@@ -383,6 +409,10 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 func skipHasNotRun(con *MyConn, args []*Arg, ctx map[string]interface{}) (*Arg, bool) {
 
 	for _, arg := range args {
+		if arg.Hold == HoldTop {
+			return arg, false
+		}
+
 		if arg.Para == ParaHas || arg.Para == ParaNot {
 			va := ctx[arg.Hold]
 			no := con.Nothing(va)
