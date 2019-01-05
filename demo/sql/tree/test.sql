@@ -31,3 +31,10 @@ UPDATE tx_parcel SET logno = -99009 WHERE id = 990001;
 -- RUN END 990001 # 在src上执行
 -- OUT END 990001 # 也在 dst上执行
 INSERT IGNORE INTO sys_hot_separation VALUES ('tx_parcel', 990001, NOW());
+
+
+-- REF max_id 'tx_item_no.max_id'
+select null as max_id;
+
+-- RUN FOR 'tx_item_no.max_id'
+replace into sys_hot_separation values ('tx_item_no', 'tx_item_no.max_id', now());

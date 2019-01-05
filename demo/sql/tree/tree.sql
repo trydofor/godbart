@@ -52,13 +52,13 @@ DELETE FROM tx_receiver where id = 'tx_receiver.id';
 
 
 -- RUN END 'tx_parcel_event.id'
-REPLACE INTO sys_hot_separation(table_name, checked_id, checked_tm) VALUES ('tx_parcel_event', 'tx_parcel_event.id', now()); -- 单行注释
+REPLACE INTO sys_hot_separation VALUES ('tx_parcel_event', 'tx_parcel_event.id', now()); -- 单行注释
 
 -- RUN END 'tx_track.id'
-REPLACE INTO sys_hot_separation(table_name, checked_id, checked_tm) VALUES ('tx_track', /*内嵌多行注释*/ 'tx_track.id', now());
+REPLACE INTO sys_hot_separation VALUES ('tx_track', /*内嵌多行注释*/ 'tx_track.id', now());
 
 -- RUN END 'tx_parcel.id'
-REPLACE INTO sys_hot_separation(table_name, checked_id, checked_tm) VALUES ('tx_parcel', 'tx_parcel.id', now());
+REPLACE INTO sys_hot_separation VALUES ('tx_parcel', 'tx_parcel.id', now());
 
 -- RUN END 'tx_parcel.id' #存在'tx_parcel.id'节点时执行，即'tx_parcel.id'不为空
 DELETE FROM tx_parcel$log WHERE create_time <= 'ENV_DATE_FROM';

@@ -3,6 +3,7 @@ package art
 import (
 	"io/ioutil"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -12,7 +13,7 @@ func Test_MakePass(t *testing.T) {
 }
 
 func Test_Ctrl_Sync(t *testing.T) {
-	CtrlRoom.Open(59062, CtrlRoomTree)
+	CtrlRoom.Open(59062, CtrlRoomTree, nil)
 }
 
 func testJob(h, v int, s string) {
@@ -49,8 +50,10 @@ func mockExe(exe *Exe, lvl int) {
 }
 
 func Test_Ctrl_Mock(t *testing.T) {
-	go CtrlRoom.Open(59062, CtrlRoomTree)
-
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go CtrlRoom.Open(59062, CtrlRoomTree, wg)
+	wg.Wait()
 	file := "../demo/sql/tree/tree.sql"
 	//file := "../demo/sql/init/1.table.sql"
 	bytes, err := ioutil.ReadFile(file)

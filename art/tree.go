@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func Tree(pref *Preference, envs map[string]string, srce *DataSource, dest []*DataSource, file []FileEntity, risk bool) error {
@@ -31,7 +32,6 @@ func Tree(pref *Preference, envs map[string]string, srce *DataSource, dest []*Da
 	}
 
 	for _, exe := range sqlx {
-		CtrlRoom.putEnv(roomTreeEnvSqlx, exe)
 		er := RunSqlx(pref, exe, scon, dcon, risk)
 		if er != nil {
 			return er
@@ -47,7 +47,7 @@ func ParseTree(pref *Preference, envs map[string]string, file []FileEntity) ([]*
 		sqls := ParseSqls(pref, &f)
 		exe, er := ParseSqlx(sqls, envs)
 		if er != nil {
-			LogError("failed to parse sqlx, file=%s", f.Path)
+			LogFatal("failed to parse sqlx, file=%s", f.Path)
 			return nil, er
 		}
 		sqlx = append(sqlx, exe)
@@ -113,9 +113,27 @@ func stmtEnv(v string, src *MyConn, tmp map[string]string) (rst string, has bool
 	return
 }
 
+type exeStat struct {
+	startd time.Time
+	agreed bool
+	valctx map[string]interface{}
+	printf func(exe *Exe, str string, src bool)
+	cnttop int64
+	cntrow int64
+	cntson int64
+	cntdst int64
+	cntsrc int64
+}
+
 func RunSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, risk bool) error {
 
-	ctx := make(map[string]interface{}) // 存放select的REF
+	para := &exeStat{}
+	para.startd = time.Now()
+	para.agreed = risk
+	para.valctx = make(map[string]interface{}) // 存放select的REF
+
+	CtrlRoom.putEnv(roomTreeEnvSqlx, sqlx)
+	CtrlRoom.putEnv(roomTreeEnvStat, para)
 
 	tmp := make(map[string]string)
 	for k, v := range sqlx.Envs {
@@ -125,14 +143,14 @@ func RunSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, risk bo
 		}
 		if h {
 			logDebug("put runtime Env, hld=%s, val=%s", k, r)
-			ctx[k] = r
+			para.valctx[k] = r
 		} else {
-			ctx[k] = v
+			para.valctx[k] = v
 		}
 	}
 
 	ncm, lcm, dlt := "\n"+pref.LineComment+" ", pref.LineComment, pref.DelimiterRaw
-	var outf = func(exe *Exe, sql string, src bool) {
+	para.printf = func(exe *Exe, sql string, src bool) {
 
 		rsrc, rout := takeSrcOutAct(exe)
 		if src {
@@ -145,7 +163,7 @@ func RunSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, risk bo
 			}
 		}
 
-		one, end, ech := actOneEndFor(exe)
+		one, end, ech := actOneEndEch(exe)
 		buf := bytes.NewBuffer(make([]byte, 0, 50))
 		buf.WriteString(fmt.Sprintf("ID=%d, LINE=%s", exe.Seg.Head, exe.Seg.Line))
 
@@ -175,7 +193,13 @@ func RunSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, risk bo
 	}
 
 	for _, exe := range sqlx.Exes {
-		er := runExe(exe, src, dst, ctx, outf, risk, 1)
+		er := runExe(exe, src, dst, para, 1)
+		scnd := time.Now().Sub(para.startd).Seconds()
+		LogTrace("stats time=%.2fs, tree/s=%.2f, src/s=%.2f, dst/s=%.2f, trees=%d, select-row=%d, child-exe=%d, src-affect=%d, dst-affect=%d",
+			scnd, float64(para.cnttop)/scnd, float64(para.cntsrc)/scnd, float64(para.cntdst)/scnd,
+			para.cnttop, para.cntrow, para.cntson,
+			para.cntsrc, para.cntdst)
+
 		if er != nil {
 			return er
 		}
@@ -186,17 +210,16 @@ func RunSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, risk bo
 
 var defValCol = regexp.MustCompile(`(VAL|COL)\[([^\[\]]*)\]`)
 
-func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, outf func(exe *Exe, str string, src bool), risk bool, lvl int) error {
+func runExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) error {
 
 	// 判断数据源和执行条件
-	if arg, igr := skipHasNotRun(src, exe.Acts, ctx); igr {
-		LogTrace("SKIP exe on Condition. arg=%d seg=%d", arg.Head, exe.Seg.Head)
-		logDebug("arg=%#v seg=%#v", arg, exe.Seg)
+	if arg, igr := skipHasNotRun(src, exe.Acts, para.valctx); igr {
+		logDebug("SKIP exe on Condition. arg=%d seg=%d", arg.Head, exe.Seg.Head)
 		return nil
 	}
 
 	// 构造执行语句
-	stmt, prnt, vals, err := buildStatement(exe, ctx, src)
+	stmt, prnt, vals, err := buildStatement(exe, para.valctx, src)
 	if err != nil {
 		return err
 	}
@@ -215,8 +238,8 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 		}
 	}
 
-	outf(exe, prnt, true)
-	outf(exe, prnt, false)
+	para.printf(exe, prnt, true)
+	para.printf(exe, prnt, false)
 
 	head := exe.Seg.Head
 	line := exe.Seg.Line
@@ -228,8 +251,7 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 		}
 	}()
 
-	LogTrace("take stmt, id=%d, lvl=%d line=%s", head, lvl, line)
-	logDebug("stmt= %q", stmt)
+	logDebug("take stmt, id=%d, lvl=%d line=%s, stmt=%q", head, lvl, line, stmt)
 	if len(exe.Defs) > 0 { // 有结果集提取，不支持OUT
 		var ff = func(row *sql.Rows) error {
 			cols, er := row.ColumnTypes()
@@ -247,8 +269,9 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 			cnt := 0
 			for row.Next() {
 				cnt++
+				para.cntrow++
 				jobx = true
-				LogTrace("deal %d-th row, id=%d, line=%s", cnt, head, line)
+				LogTrace("loop %d-th row, id=%d, line=%s", cnt, head, line)
 				row.Scan(ptrs...)
 
 				//// 提取结果集
@@ -263,12 +286,12 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 								j-- // 从1开始
 								if sub[1] == "COL" {
 									cln := cols[j].Name()
-									ctx[hld] = cln
+									para.valctx[hld] = cln
 									logDebug("simple sys DEF, hold=%s, para=%s, col-name=%s", hld, ptn, cln)
 								} else { // VAL
-									ctx[hld] = vals[j]
+									para.valctx[hld] = vals[j]
 									dbt := cols[j].DatabaseTypeName()
-									ctx[hld+":DatabaseTypeName"] = dbt
+									para.valctx[hld+":DatabaseTypeName"] = dbt
 									logDebug("simple sys DEF, hold=%s, para=%s, value=%#v, dbtype=%s", hld, ptn, vals[j], dbt)
 								}
 							} else {
@@ -278,15 +301,15 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 									for i, c := range cols {
 										cls[i] = c.Name()
 									}
-									ctx[pld] = cls
+									para.valctx[pld] = cls
 									logDebug("simple sys DEF, hold=%s, para=%s, values'count=%d", pld, ptn, len(cls))
 								} else {
 									dbt := make([]string, ln)
 									for i, c := range cols {
 										dbt[i] = c.DatabaseTypeName()
 									}
-									ctx[pld] = vals
-									ctx[pld+":DatabaseTypeName"] = dbt
+									para.valctx[pld] = vals
+									para.valctx[pld+":DatabaseTypeName"] = dbt
 									logDebug("simple sys DEF, hold=%s, para=%s, value'count=%d", pld, ptn, len(dbt))
 								}
 							}
@@ -295,9 +318,9 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 
 					for i := 0; lost && i < ln; i++ {
 						if strings.EqualFold(cols[i].Name(), ptn) {
-							ctx[hld] = vals[i]
+							para.valctx[hld] = vals[i]
 							dbt := cols[i].DatabaseTypeName()
-							ctx[hld+":DatabaseTypeName"] = dbt
+							para.valctx[hld+":DatabaseTypeName"] = dbt
 							ltr, _ := src.Literal(vals[i], dbt)
 							logDebug("simple usr DEF, hold=%s, para=%s, value=%s", hld, ptn, ltr)
 							lost = false
@@ -311,14 +334,23 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 				}
 
 				// 遍历子树, ONE,FOR,END
+				bsn := false
 				for _, son := range exe.Sons {
 					if !shouldForAct(son, cnt) {
 						continue
 					}
-					LogTrace("fork ONE/FOR child=%d, parent=%d, lvl=%d", son.Seg.Head, head, lvl+1)
-					er := runExe(son, src, dst, ctx, outf, risk, lvl+1)
+					logDebug("fork ONE/FOR child=%d, parent=%d, lvl=%d", son.Seg.Head, head, lvl+1)
+					er := runExe(son, src, dst, para, lvl+1)
 					if er != nil {
 						return er
+					}
+					bsn = true
+				}
+
+				if bsn { // 有zi
+					para.cntson++
+					if lvl == 1 {
+						para.cnttop++
 					}
 				}
 
@@ -333,8 +365,8 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 					if !shouldEndAct(son, cnt) {
 						continue
 					}
-					LogTrace("fork END child=%d, parent=%d, lvl=%d", son.Seg.Head, head, lvl+1)
-					er := runExe(son, src, dst, ctx, outf, risk, lvl+1)
+					logDebug("fork END child=%d, parent=%d, lvl=%d", son.Seg.Head, head, lvl+1)
+					er := runExe(son, src, dst, para, lvl+1)
 					if er != nil {
 						return er
 					}
@@ -353,17 +385,18 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 	} else {
 		rsrc, rout := takeSrcOutAct(exe)
 		dcnt := len(dst)
-		if risk {
+		if para.agreed {
 			if rsrc {
 				logDebug("running on SRC db=%s", dbsName)
 				if a, e := src.Exec(stmt, vals...); e != nil {
 					LogError("failed on SRC=%s, id=%d, lvl=%d err=%v", dbsName, head, lvl, e)
 					return e
 				} else {
+					para.cntsrc = para.cntsrc + a
 					LogTrace("affect %d on SRC=%s, id=%d, lvl=%d", a, dbsName, head, lvl)
 				}
 			}
-
+			// 单线程，出错停止
 			if rout {
 				for i, db := range dst {
 					dboName := db.DbName()
@@ -377,6 +410,7 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, ctx map[string]interface{}, ou
 						LogError("failed on [%d/%d]OUT=%s, id=%d, lvl=%d, err=%v", i+1, dcnt, dboName, head, lvl, e)
 						return e
 					} else {
+						para.cntdst = para.cntdst + a
 						LogTrace("affect %d on [%d/%d]OUT=%s, id=%d, lvl=%d", a, i+1, dcnt, dboName, head, lvl)
 					}
 				}
@@ -413,14 +447,22 @@ func skipHasNotRun(con *MyConn, args []*Arg, ctx map[string]interface{}) (*Arg, 
 			return arg, false
 		}
 
-		if arg.Para == ParaHas || arg.Para == ParaNot {
+		par := arg.Para
+		if par == ParaHas || par == ParaNot {
 			va := ctx[arg.Hold]
 			no := con.Nothing(va)
 			//
-			if arg.Para == ParaHas && no {
+			if par == ParaHas && no {
 				return arg, true
 			}
-			if arg.Para == ParaNot && !no {
+			if par == ParaNot && !no {
+				return arg, true
+			}
+		}
+
+		if par == ParaOne || par == ParaFor || par == ParaEnd {
+			va := ctx[arg.Hold]
+			if va == nil {
 				return arg, true
 			}
 		}
@@ -449,7 +491,7 @@ func takeSrcOutAct(exe *Exe) (bool, bool) {
 	return src, out
 }
 
-func actOneEndFor(exe *Exe) (one, end, ech bool) {
+func actOneEndEch(exe *Exe) (one, end, ech bool) {
 	one, end, ech = false, false, false
 	for _, arg := range exe.Acts {
 		switch arg.Para {
@@ -467,7 +509,7 @@ func actOneEndFor(exe *Exe) (one, end, ech bool) {
 
 func shouldForAct(exe *Exe, cnt int) bool {
 
-	one, end, ech := actOneEndFor(exe)
+	one, end, ech := actOneEndEch(exe)
 
 	// 有END时，必须有FOR
 	if end {
@@ -489,7 +531,7 @@ func shouldForAct(exe *Exe, cnt int) bool {
 
 func shouldEndAct(exe *Exe, cnt int) bool {
 
-	one, end, ech := actOneEndFor(exe)
+	one, end, ech := actOneEndEch(exe)
 
 	// 有FOR的时候，END会在FOR中执行
 	if ech {

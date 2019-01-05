@@ -17,15 +17,23 @@ func logDebug(m string, a ...interface{}) {
 		log.Printf("[DEBUG] "+m+"\n", a...)
 	}
 }
+
 func LogTrace(m string, a ...interface{}) {
 	if MsgLevel >= LvlTrace {
 		log.Printf("[TRACE] "+m+"\n", a...)
 	}
 
 }
+
 func LogError(m string, a ...interface{}) {
 	if MsgLevel >= LvlError {
-		log.Fatalf("[ERROR] "+m+"\n", a...)
+		log.Printf("[ERROR] "+m+"\n", a...)
+	}
+}
+
+func LogFatal(m string, a ...interface{}) {
+	if MsgLevel >= LvlError {
+		log.Fatalf("[FATAL] "+m+"\n", a...)
 	}
 }
 
@@ -41,7 +49,7 @@ func OutTrace(m string, a ...interface{}) {
 
 func errorAndLog(m string, a ...interface{}) error {
 	s := fmt.Sprintf(m, a...)
-	LogTrace("%s", s)
+	LogError("%s", s)
 	return errors.New(s)
 }
 
@@ -92,7 +100,7 @@ func BuiltinEnvs(envs map[string]string) {
 			LogTrace("put builtin env, k=%s, v=%q", EnvUser, cu.Username)
 		} else {
 			envs[EnvUser] = ""
-			LogError("put builtin env empty, k=%s, err=%v", EnvUser, err)
+			LogFatal("put builtin env empty, k=%s, err=%v", EnvUser, err)
 		}
 	}
 
@@ -103,7 +111,7 @@ func BuiltinEnvs(envs map[string]string) {
 			LogTrace("put builtin env, k=%s, v=%q", EnvHost, ht)
 		} else {
 			envs[EnvHost] = "localhost"
-			LogError("put builtin 'localhost', k=%s, err=%v", EnvHost, err)
+			LogFatal("put builtin 'localhost', k=%s, err=%v", EnvHost, err)
 		}
 	}
 

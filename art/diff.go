@@ -16,7 +16,7 @@ type DiffItem struct {
 func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regexp) error {
 
 	if srce == nil {
-		return errorAndLog("need source db to diff, kind=%s", kind)
+		return errorAndLog("need source db to diff, type=%s", kind)
 	}
 
 	if kind == DiffDdl {
@@ -54,7 +54,7 @@ func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, r
 
 	stbl, sset, err := makeTbname(scon, rgx)
 	if err != nil {
-		LogError("failed to list tables, db=%s, err=%v", scon.DbName(), err)
+		LogFatal("failed to list tables, db=%s, err=%v", scon.DbName(), err)
 		return err
 	}
 
@@ -64,7 +64,7 @@ func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, r
 	for _, con := range dcon {
 		dtbl, dset, er := makeTbname(con, rgx)
 		if er != nil {
-			LogError("failed to list tables, db=%s, err=%v", con.DbName(), er)
+			LogFatal("failed to list tables, db=%s, err=%v", con.DbName(), er)
 			return er
 		}
 		LogTrace("=== diff tbname ===, left=%s, right=%s", scon.DbName(), con.DbName())

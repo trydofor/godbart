@@ -8,6 +8,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -98,7 +99,7 @@ func checkEnvs(ctx *cli.Context) map[string]string {
 }
 
 func checkType(ctx *cli.Context, knd []string, dft string) string {
-	flag := ctx.String("k")
+	flag := ctx.String("t")
 	kind, ok := dft, false
 	for _, v := range knd {
 		if strings.EqualFold(flag, v) {
@@ -107,8 +108,8 @@ func checkType(ctx *cli.Context, knd []string, dft string) string {
 			break
 		}
 	}
-	art.ExitIfTrue(!ok, -6, "unsupported (K)ind=%q", flag)
-	art.LogTrace("got kind=%s", flag)
+	art.ExitIfTrue(!ok, -6, "unsupported (T)ype=%q", flag)
+	art.LogTrace("got type=%s", flag)
 	return kind
 }
 
@@ -161,7 +162,7 @@ func diff(ctx *cli.Context) error {
 	return art.Diff(&conf.Preference, srce, dest, kind, tbls)
 }
 
-func sync(ctx *cli.Context) error {
+func synk(ctx *cli.Context) error {
 	checkMlvl(ctx)
 	conf := checkConf(ctx)
 	dest := checkDest(ctx, conf, false)
@@ -179,7 +180,10 @@ func tree(ctx *cli.Context) error {
 	dest := checkDest(ctx, conf, false)
 	risk := checkRisk(ctx)
 	sqls := checkSqls(ctx)
-	go art.CtrlRoom.Open(conf.Preference.ControlPort, art.CtrlRoomTree)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go art.CtrlRoom.Open(conf.Preference.ControlPort, art.CtrlRoomTree, wg)
+	wg.Wait()
 	return art.Tree(&conf.Preference, conf.StartupEnv, srce, dest, sqls, risk)
 }
 
@@ -220,7 +224,7 @@ func main() {
 	app := cli.NewApp()
 
 	app.Author = "github.com/trydofor"
-	app.Version = "0.9.5"
+	app.Version = "0.9.6"
 	app.Compiled = time.Now()
 
 	app.Name = "godbart"
@@ -362,7 +366,7 @@ func main() {
 				mlvlFlag,
 				riskFlag,
 			},
-			Action: sync,
+			Action: synk,
 		},
 		{
 			Name:      "tree",

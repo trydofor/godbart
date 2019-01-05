@@ -138,6 +138,7 @@ REPLACE INTO sys_schema_version (version, created) VALUES( 2018022801, NOW());
  -c godbart.toml \
  -s prd_main \
  -d prd_2018 \
+ -d dev_main \
  -t all \
  'tx_.*' \
 | tee main-2018-diff-out.log
@@ -233,21 +234,21 @@ CREATE TABLE `sys_hot_separation` (
 -- 不存在则增加默认值
 INSERT IGNORE sys_hot_separation VALUES ('tx_parcel',0,now());
 
--- REF checked_id 990001  #数据树根节点
+-- VAR checked_id 'tx_parcel.checked_id'  #数据树根节点
 SELECT checked_id FROM sys_hot_separation WHERE table_name = 'tx_parcel';
 
--- REF id 990002  #一级树节点990002，父节点是 990001
--- REF track_num 'TRK0001'  #提取结果中的id和track_num作为变量，形成数据树
-SELECT * FROM tx_parcel WHERE id > 990001 LIMIT 10;
+-- REF id 'tx_parcel.id'  #一级树节点'tx_parcel.id'，父节点是 'tx_parcel.checked_id'
+-- REF track_num 'tx_parcel.track_num'  #提取结果中的id和track_num作为变量，形成数据树
+SELECT * FROM tx_parcel WHERE id > 'tx_parcel.checked_id' LIMIT 10;
 
 -- REF id 990003  #二级树节点990003，父节点是 TRK0001
-SELECT * FROM tx_track WHERE track_num = 'TRK0001';
+SELECT * FROM tx_track WHERE track_num = 'tx_parcel.track_num';
 
--- REF id 990004 #二级树节点990004，父节点是 990002
-SELECT * FROM tx_parcel_event WHERE parcel_id = 990002;
+-- REF id 990004 #二级树节点990004，父节点是 'tx_parcel.id'
+SELECT * FROM tx_parcel_event WHERE parcel_id = 'tx_parcel.id';
 
--- RUN FOR 990002 #每棵990002树节点完成时，执行此语句
-REPLACE INTO sys_hot_separation VALUES ('tx_parcel', 990002, now());
+-- RUN FOR 'tx_parcel.id' #每棵'tx_parcel.id'树节点完成时，执行此语句
+REPLACE INTO sys_hot_separation VALUES ('tx_parcel', 'tx_parcel.id', now());
 ```
 
 ### 1.6. 控制端口
@@ -268,12 +269,16 @@ REPLACE INTO sys_hot_separation VALUES ('tx_parcel', 990002, now());
  * `/` 公聊，跟所有登录用户发消息。
  * `/ip:port ` 私聊，指定登录用户发消息。
 
+非全局命令，称作一个`room`，一个room内，改变行为的命令的信息时全员可见的。
 只对`Tree`提供了以下命令，可使用不存在的id查看当前运行情况。
+
+
  * tree - 显示当前在执行的sqlx的树状结构及ID。
- * stop - 优雅的停止程序(exit 99)
+ * stat - 显示当前在执行的信息。
+ * stop - 优雅的停止程序(exit 99)，全员可见。
    - stop 直接在当前树结束时停止。
    - stop N 在id=N的树时停止，N<0时等效于stop。
- * wait - 执行等待，kill可继续。长时间停止可能导致数据库连接超时。
+ * wait - 执行等待，kill可继续。长时间停止可能导致数据库连接超时。全员可见。
    - wait 在当前树完成时等待。
    - wait N 在id=N的树时停止，N<0时等效于stop。
    
@@ -282,16 +287,12 @@ REPLACE INTO sys_hot_separation VALUES ('tx_parcel', 990002, now());
 telnet 127.0.0.1 59062
 # 以下为连接成功输入的命令。
 
-# 查看运行信息
-info
-# 查看当前执行`数据树`结构
-tree
-# 空等待，显示每个执行节点信息。
-wait 0
-# 清理掉所有任务
-kill
-# 优雅停止在一棵树的结束
-stop
+info # 查看运行信息
+tree # 查看当前执行`数据树`结构
+stat # 查看统计情况
+wait 0 # 空等待，显示每个执行节点信息。
+kill # 清理掉所有任务
+stop # 优雅停止当前一棵树的结束
 ```
 
 ## 2. 指令变量
@@ -392,7 +393,11 @@ SELECT * FROM tx_parcel_event WHERE parcel_id = 1234567890;
  * 不能用`[`或`]`，因为你懂的。
  * 仅支持`\\`，`\t`，`\n`的字符转义。
 
-### 2.3. 静态替换 STR
+### 2.3. 变量声明 VAR
+
+同`REF`一样作用于结果集，但不形成树状结构。和`ENV`相比，可以时string之外的SQL类型。
+
+### 2.4. 静态替换 STR
 
 `STR`与`ENV`和`REF`不同，采用的是静态替换字符串。
 它可以直接定义（同`REF`和`ENV`），也以重新电影其他`占位`。
@@ -420,26 +425,26 @@ CREATE TABLE tx_parcel_$y4_table LIKE tx_parcel;
 -- STR COL[1] $COL1  #直接定义。
 -- STR "`COL[]` = VAL[]" "logno = -99009"  #直接定义，脱引号，模式展开。
 -- REF VAL[1] '占位值'
--- REF id 990001
+-- REF id 'tx_parcel.checked_id'
 SELECT * FROM tx_parcel WHERE create_time = '2018-11-23 12:34:56';
 
 INSERT INTO tx_parcel (`$COL1`) VALUES ('占位值');
 -- 替换后
 -- INSERT INTO tx_parcel (`id`) VALUES (?);
 
-UPDATE tx_parcel SET logno = -99009 WHERE id=990001;
+UPDATE tx_parcel SET logno = -99009 WHERE id='tx_parcel.checked_id';
 -- 替换后
--- UPDATE tx_parcel SET `id` = ? ,`create_time` = ? /*循环加下去，逗号分割*/ WHERE id=990001;
+-- UPDATE tx_parcel SET `id` = ? ,`create_time` = ? /*循环加下去，逗号分割*/ WHERE id='tx_parcel.checked_id';
 ```
 
-### 2.4. 条件执行 RUN
+### 2.5. 条件执行 RUN
 
-执行条件由`REF`或`ENV`定义，只对所在的语句有效。
+执行条件由`REF`或`ENV`定义，只对所在的语句有效，执行顺序与SQL行顺序有关。
 
- * `FOR` 以定义`占位`的节点为根，每棵树结束时执行。等效于Hold依赖关系。
  * `ONE` 以定义`占位`的节点为根，第一棵树时执行。
- * `END` 以定义`占位`的节点为根，最后一棵树时执行。
- * `HAS` 表示`占位`变量有值时执行。`有值`指，
+ * `FOR` 以定义`占位`的节点为根，每棵树时执行，等效于`REF`。
+ * `END` 以定义`占位`的节点为根，最后一棵树执行。
+ * `HAS` 表示`占位`变量有值时执行该树。`有值`指，
     - 数值大于`0`
     - 布尔`true`
     - 非`NULL`
@@ -458,7 +463,7 @@ UPDATE tx_parcel SET logno = -99009 WHERE id=990001;
 
 条件执行的例子，参考 `demo/sql/tree/*.sql`
 
-### 2.5. 输出执行 OUT
+### 2.6. 输出执行 OUT
 
 与条件执行 `RUN` 一样的定义，但不在源DB上执行，而是在目标DB上执行。
 
@@ -758,20 +763,55 @@ WHERE
 
 ### 4.５. 全部同步
 
-有些小表或功能表，可以全部同步或备份。
+有些小表或功能表，可以全部同步或备份，可使用正则替换以下模板。
 ```mysql
 -- STR OUT-DB OUTDB
--- REF id 'tx_sender.max_id'
-SELECT MAX(ID) AS MAX_ID FROM TX_SENDER;
+-- VAR checked_id 'tx_sender.checked_id'
+select checked_id from sys_hot_separation where table_name = 'tx_sender';
+
+-- REF max_id 'tx_sender.max_id'
+select max(id) as max_id from tx_sender where id > 'tx_sender.checked_id';
 
 -- OUT FOR 'tx_sender.max_id'
-REPLACE INTO OUTDB.TX_SENDER SELECT * FROM TX_SENDER WHERE ID > (
-  SELECT MAX(CHECKED_ID) FROM SYS_HOT_SEPARATION WHERE TABLE_NAME = 'tx_sender'
-);
+replace into OUTDB.tx_sender
+  select * from tx_sender
+  where id > 'tx_sender.checked_id' and id <= 'tx_sender.max_id';
 
 -- RUN FOR 'tx_sender.max_id'
-REPLACE INTO SYS_HOT_SEPARATION VALUES ('tx_sender', 'tx_sender.max_id', NOW());
+replace into sys_hot_separation values ('tx_sender', 'tx_sender.max_id', now());
 ```
+
+### 4.6. 如何对比迁移数据
+统计各表的数据变化，查看迁移效果
+```mysql
+-- 统计库数据
+SELECT 
+    TABLE_SCHEMA,
+    SUM(TABLE_ROWS)
+FROM
+    INFORMATION_SCHEMA.TABLES
+WHERE
+    TABLE_SCHEMA like 'godbart_%'
+GROUP BY 
+    TABLE_SCHEMA;
+
+-- 统计表数据
+SELECT 
+    TABLE_NAME,
+    TABLE_ROWS
+FROM
+    INFORMATION_SCHEMA.TABLES
+WHERE
+    TABLE_SCHEMA = 'godbart_prd_main'
+    AND TABLE_ROWS > 0
+ORDER BY 
+    TABLE_ROWS DESC;
+```
+
+### 4.7. 如何静态分析和运行时监控
+
+静态分析，第一步，要执行sqlx命令，分析树结构。第二部，不带agree参数在db上执行以下，看debug日志。
+运行时监控，使用控制端口，telnet连接过去，使用`stat|wait|tree`命令，还有本机日志。
 
 
 ## 5. 不想理你的问题
@@ -790,3 +830,7 @@ REPLACE INTO SYS_HOT_SEPARATION VALUES ('tx_sender', 'tx_sender.max_id', NOW());
 * Q03：`FOR`中只有`HAS`和`NOT`，会增加`>`,`<`或其他运算符？
   - 复杂的条件判断，可以由SQL语句产生，然后`REF`。
   - 写那么复杂的SQL，不如去编程好了。
+  
+* Q04：数据树迁移的吞吐量/性能如何？
+  - 坏消息是吞吐量不太好，好消息是不占资源。
+  - 实测一棵4层100条SQL的数据树，同机同实例千万数据，每秒迁移2.8棵树。

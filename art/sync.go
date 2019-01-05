@@ -7,7 +7,7 @@ import (
 func Sync(srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regexp) error {
 
 	if srce == nil {
-		return errorAndLog("need source db to diff, kind=%s", kind)
+		return errorAndLog("need source db to diff, type=%s", kind)
 	}
 
 	scon, err := openDbAndLog(srce)
@@ -32,7 +32,7 @@ func Sync(srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regex
 			}
 			name = append(name, "table="+v)
 			ddls = append(ddls, ddl)
-			LogTrace("%4d ddl table=%s", len(tbls), v)
+			LogTrace("%4d ddl table=%s", len(ddls), v)
 		}
 	}
 
@@ -49,7 +49,7 @@ func Sync(srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regex
 				}
 				name = append(name, "trigger="+k)
 				ddls = append(ddls, ddl)
-				LogTrace("%4d ddl trigger=%s", len(tbls), k)
+				LogTrace("%4d ddl trigger=%s", len(ddls), k)
 			}
 		}
 	}
@@ -62,11 +62,11 @@ func Sync(srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regex
 		}
 
 		for i, v := range ddls {
-			_, er := conn.Exec(v)
-			if er != nil {
-				LogError("%d/%d failed on db=%s, name=%s, err=%v", i+1, cnt, db.Code, name[i], er)
+			_, e2 := conn.Exec(v)
+			if e2 != nil {
+				LogError("%4d/%d failed on db=%s, name=%s, err=%v", i+1, cnt, db.Code, name[i], e2)
 			} else {
-				LogTrace("%d/%d done db=%s, name=%s", i+1, cnt, db.Code, name[i])
+				LogTrace("%4d/%d done db=%s, name=%s", i+1, cnt, db.Code, name[i])
 			}
 		}
 	}

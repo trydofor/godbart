@@ -18,6 +18,7 @@ const (
 	CtrlExitcd      = 99
 	CtrlRoomTree    = "tree"
 	roomTreeEnvSqlx = "tree_env_cur_sqlx"
+	roomTreeEnvStat = "tree_env_cur_stat"
 	//
 	passLength = 24
 	passTables = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ" // 32
@@ -30,6 +31,7 @@ const (
 	roomBaseHelp = "help"
 	//
 	roomTreeSqlx = "tree"
+	roomTreeStat = "stat"
 	roomTreeStop = "stop"
 	roomTreeWait = "wait"
 
@@ -41,7 +43,10 @@ info - show room's info (pid,user,jobs...)'.
 kill N - kill id=N job. N=-1 means kill all.
 `
 	helpTreeTree = `
-tree - show the running sqlx
+tree - show the running sqlx tree
+`
+	helpTreeStat = `
+stat - show the running statistic
 `
 	helpTreeStop = `
 stop - gracefully stop when tree done (exit 99)
@@ -60,6 +65,7 @@ type CtrlJob struct {
 	cmnd string // 命令
 	user string // 提交者
 	time string // 提交时间
+	solo bool   // 单独发送
 }
 
 func (j *CtrlJob) String() string {
@@ -84,7 +90,7 @@ type Room struct {
 	jcid int64    // 待执行的 job id
 }
 
-func (room *Room) Open(port int, name string) {
+func (room *Room) Open(port int, name string, wait *sync.WaitGroup) {
 	if port <= 0 {
 		LogTrace("skip ControlPort, name=%s, port=%d", name, port)
 	}
@@ -100,14 +106,13 @@ func (room *Room) Open(port int, name string) {
 
 	switch name {
 	case CtrlRoomTree:
-		room.help = []byte(helpBase + helpTreeTree + helpTreeStop + helpTreeWait)
+		room.help = []byte(helpBase + helpTreeTree + helpTreeStat + helpTreeStop + helpTreeWait)
 		room.cmdw = []string{roomTreeStop, roomTreeWait}
-		room.cmdi = []string{roomTreeSqlx}
+		room.cmdi = []string{roomTreeSqlx, roomTreeStat}
 		room.echo = make(chan string)
 		room.boff = false
 	default:
-		LogError("unsupported room %s", name)
-		os.Exit(CtrlExitcd)
+		LogFatal("unsupported room %s", name)
 	}
 
 	// 监听端口，单例控制
@@ -117,29 +122,32 @@ func (room *Room) Open(port int, name string) {
 		es := err.Error()
 		if strings.Contains(es, "address already in use") {
 			info := askInfo(ntw)
-			es = fmt.Sprintf("an instant is running info=%s", info)
+			es = fmt.Sprintf("an instant is running. %s", info)
 		}
-		LogError("%s", es)
-		os.Exit(CtrlExitcd)
+		LogFatal("%s", es)
 	}
 
 	LogTrace("CONTROLPORT started, port=%d, pid=%d, PASS=%s", port, room.pid, room.pass)
 
 	//
+	if wait != nil {
+		wait.Done()
+	}
+
 	defer server.Close()
 
-	go room.dealTalk()
+	go room.gogoTalk()
 	for {
 		conn, err := server.Accept()
 		if err != nil {
-			LogError("a bad client connection error=%v", err)
+			LogError("skip a bad client. error=%v", err)
+			continue
 		}
-		go room.dealConn(conn)
+		go room.gogoConn(conn)
 	}
 }
 
 var (
-	bytesProm = []byte("\r\n>")
 	bytesAuth = []byte("need password to auth\r\n")
 	bytesUnsp = []byte("unsupported control command\r\n")
 )
@@ -149,7 +157,8 @@ func (room *Room) infoByte(user string) []byte {
 	sb.WriteString(fmt.Sprintf("\r\npid  = %d", room.pid))
 	sb.WriteString(fmt.Sprintf("\r\nroom = %s", room.name))
 	room.jobs.Range(func(k, v interface{}) bool {
-		sb.WriteString(fmt.Sprintf("\r\n%#v", v))
+		jb := v.(*CtrlJob)
+		sb.WriteString(fmt.Sprintf("\r\njob=%d, user=%s, cmnd=%s", jb.id, jb.user, jb.cmnd))
 		return true
 	})
 	room.user.Range(func(k, v interface{}) bool {
@@ -163,13 +172,14 @@ func (room *Room) infoByte(user string) []byte {
 	return sb.Bytes()
 }
 
-func (room *Room) putJob(cmnd, user string) {
+func (room *Room) putJob(cmnd, user string, solo bool) {
 	id := atomic.AddInt64(&room.jbid, 1)
 	dt := time.Now().Format("15:04:05")
-	jb := &CtrlJob{id, cmnd, user, dt}
+	jb := &CtrlJob{id, cmnd, user, dt, solo}
 	room.jobs.Store(id, jb)
-	room.echo <- fmt.Sprintf("job=%v applied", jb)
-	LogTrace("job=%v applied", jb)
+	text := fmt.Sprintf("job applied, job=%d, user=%s, cmnd=%s", jb.id, jb.user, jb.cmnd)
+	room.echo <- text
+	LogTrace(text)
 }
 
 func (room *Room) delJob(user string, id int64) {
@@ -187,41 +197,47 @@ func (room *Room) delJob(user string, id int64) {
 	}
 }
 
-func (room *Room) dealConn(conn net.Conn) {
+func (room *Room) gogoConn(conn net.Conn) {
 	user := conn.RemoteAddr().String()
+	authed := strings.HasPrefix(user, "127.0.0.")
+
+	if authed {
+		conn.Write(room.infoByte(user))
+		conn.Write(makeProm())
+	} else {
+		time.Sleep(time.Second * 5)
+	}
+
 	defer func() {
 		LogTrace("client %s is closed.", user)
+		room.dealEcho(user, "user logout, "+user, false)
 		room.user.Delete(user)
 		conn.Close()
 	}()
 
 	reader := bufio.NewReader(conn)
-	authed := strings.HasPrefix(user, "127.0.0.")
-
 	// auth
 	for !authed {
 		conn.Write(bytesAuth)
-		pass, _ := reader.ReadString('\n')
-		if strings.TrimSpace(pass) == room.pass {
+		pass, er := reader.ReadString('\n')
+		if er != nil && strings.TrimSpace(pass) == room.pass {
+			conn.Write(room.infoByte(user))
+			conn.Write(makeProm())
 			authed = true
 			break
 		} else {
-			// one time
-			return
+			return // one time
 		}
 	}
 
-	// command
 	room.user.Store(user, conn)
-	conn.Write(bytesProm)
-	for {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			return
-		}
-		line = strings.Replace(line, "\t", " ", -1);
-		line = strings.TrimSpace(line);
-		switch part := strings.SplitN(line, " ", 2); part[0] {
+	room.dealEcho(user, "user loging, "+user, false)
+
+	// command
+	for ln, err := reader.ReadString('\n'); err == nil; ln, err = reader.ReadString('\n') {
+		ln = strings.Replace(ln, "\t", " ", -1);
+		ln = strings.TrimSpace(ln);
+		switch part := strings.SplitN(ln, " ", 2); part[0] {
 		case "":
 			continue
 		case roomBaseExit:
@@ -235,7 +251,7 @@ func (room *Room) dealConn(conn net.Conn) {
 			if len(part) > 1 {
 				id, er := strconv.ParseInt(part[1], 10, 64)
 				if er != nil {
-					conn.Write([]byte(fmt.Sprintf("bad job id %s, err=%s", line, er.Error())));
+					conn.Write([]byte(fmt.Sprintf("bad job id %s, err=%s", ln, er.Error())));
 					continue
 				}
 				jbid = int64(id)
@@ -249,39 +265,39 @@ func (room *Room) dealConn(conn net.Conn) {
 			LogTrace("client %s chagned pass. NEW-PASS=%s", user, room.pass)
 			room.echo <- user + " changed room pass."
 		default:
-			if strings.HasPrefix(line, "/") {
-				room.echo <- fmt.Sprintf("%s <%s", line, user)
+			if strings.HasPrefix(ln, "/") {
+				room.echo <- fmt.Sprintf("%s <%s", ln, user)
 				continue
 			}
 
 			fd := -1
 			for _, v := range room.cmdi {
-				if strings.HasPrefix(line, v) {
+				if strings.HasPrefix(ln, v) {
 					fd = 1
 					break
 				}
 			}
 			for _, v := range room.cmdw {
-				if strings.HasPrefix(line, v) {
+				if strings.HasPrefix(ln, v) {
 					fd = 2
 					break
 				}
 			}
 
 			if fd == 1 {
-				job := &CtrlJob{-1, line, user, time.Now().Format("15:04:05")}
+				job := &CtrlJob{-1, ln, user, time.Now().Format("15:04:05"), true}
 				room.dealJobx(job)
 			} else if fd == 2 {
-				room.putJob(line, user)
+				room.putJob(ln, user, false)
 			} else {
 				conn.Write(bytesUnsp)
 			}
 		}
-		conn.Write(bytesProm)
+		conn.Write(makeProm())
 	}
 }
 
-func (room *Room) dealTalk() {
+func (room *Room) gogoTalk() {
 	for {
 		info := <-room.echo // waiting
 		if len(info) == 0 {
@@ -292,6 +308,7 @@ func (room *Room) dealTalk() {
 			break
 		}
 
+		bytesProm := makeProm()
 		if strings.HasPrefix(info, "/") {
 			info = strings.TrimSpace(info[1:])
 			var s, r net.Conn
@@ -328,6 +345,17 @@ func (room *Room) dealTalk() {
 	}
 }
 
+func (room *Room) dealEcho(user, text string, solo bool) {
+	if solo {
+		if con, ho := room.user.Load(user); ho {
+			conn := con.(net.Conn)
+			conn.Write([]byte(text))
+			return
+		}
+	}
+	room.echo <- text
+}
+
 // single thread
 func (room *Room) dealJobx(job *CtrlJob, args ... interface{}) {
 	if room.boff { // not init
@@ -358,10 +386,10 @@ func (room *Room) dealJobx(job *CtrlJob, args ... interface{}) {
 	switch room.name {
 	case CtrlRoomTree:
 
-		if strings.HasSuffix(job.cmnd, roomTreeSqlx) {
+		if strings.HasPrefix(job.cmnd, roomTreeSqlx) {
 			v1, ok := room.envs.Load(roomTreeEnvSqlx)
 			if !ok {
-				room.echo <- "can not find current sqlx"
+				room.dealEcho(job.user, "can not find current sqlx", false)
 				return
 			}
 
@@ -370,9 +398,26 @@ func (room *Room) dealJobx(job *CtrlJob, args ... interface{}) {
 			for _, x := range sqlx.Exes {
 				sb.WriteString(x.Tree())
 			}
-			text := sb.String()
 
-			room.echo <- text
+			room.dealEcho(job.user, sb.String(), job.solo)
+			return
+		}
+
+		if strings.HasPrefix(job.cmnd, roomTreeStat) {
+			v1, ok := room.envs.Load(roomTreeEnvStat)
+			if !ok {
+				room.dealEcho(job.user, "can not find current stat", false)
+				return
+			}
+			para := v1.(*exeStat)
+			scnd := time.Now().Sub(para.startd).Seconds()
+			text := fmt.Sprintf("elapsed=%.2fs, tree/s=%.2f, src/s=%.2f, dst/s=%.2fs\r\ntrees=%d, select-row=%d, child-exe=%d\r\nsrc-affect=%d, dst-affect=%d",
+				scnd, float64(para.cnttop)/scnd, float64(para.cntsrc)/scnd, float64(para.cntdst)/scnd,
+				para.cnttop, para.cntrow, para.cntson,
+				para.cntsrc, para.cntdst)
+
+			room.dealEcho(job.user, text, job.solo)
+
 			return
 		}
 
@@ -390,19 +435,19 @@ func (room *Room) dealJobx(job *CtrlJob, args ... interface{}) {
 			headArg = int(hd)
 		}
 
-		LogTrace("at=%d, job=%v", headRun, job)
-		room.echo <- fmt.Sprintf("at=%d, job=%v\n", headRun, job)
+		LogTrace("tree at=%3d, job=%v", headRun, job)
+		room.dealEcho(job.user, fmt.Sprintf("tree at=%3d, job=%d, user=%s, cmnd=%s\n", headRun, job.id, job.user, job.cmnd), false)
 
 		if strings.HasSuffix(part[0], roomTreeStop) {
 			if headArg < 0 {
 				LogTrace("exited by %s", job.cmnd)
-				room.echo <- fmt.Sprintf("exited in 5 seconds, by %s\n", job.cmnd)
+				room.dealEcho(job.user, fmt.Sprintf("exited in 5 seconds, by %s\n", job.cmnd), false)
 				time.Sleep(time.Second * 5)
 				os.Exit(CtrlExitcd)
 			} else {
 				if headRun == headArg {
 					LogTrace("exited by %s", job.cmnd)
-					room.echo <- fmt.Sprintf("exited in 5 seconds, by %s\n", job.cmnd)
+					room.dealEcho(job.user, fmt.Sprintf("exited in 5 seconds, by %s\n", job.cmnd), false)
 					time.Sleep(time.Second * 5)
 					os.Exit(CtrlExitcd)
 				} else {
@@ -412,20 +457,24 @@ func (room *Room) dealJobx(job *CtrlJob, args ... interface{}) {
 		} else if strings.HasSuffix(part[0], roomTreeWait) {
 			if headArg < 0 {
 				LogTrace("waiting by %s", job.cmnd)
+				room.dealEcho(job.user, fmt.Sprintf("waiting by %s", job.cmnd), false)
 				for {
 					time.Sleep(time.Second * 3)
 					_, oh := room.jobs.Load(job.id)
 					if !oh {
+						room.dealEcho(job.user, fmt.Sprintf("resume from %s", job.cmnd), false)
 						return
 					}
 				}
 			} else {
 				if headRun == headArg {
 					LogTrace("waiting by %s", job.cmnd)
+					room.dealEcho(job.user, fmt.Sprintf("waiting by %s", job.cmnd), false)
 					for {
 						time.Sleep(time.Second * 3)
 						_, oh := room.jobs.Load(job.id)
 						if !oh {
+							room.dealEcho(job.user, fmt.Sprintf("resume from %s", job.cmnd), false)
 							return
 						}
 					}
@@ -459,8 +508,30 @@ func askInfo(ntw string) string {
 	}
 	defer conn.Close()
 
-	conn.Write([]byte(roomBaseInfo))
+	conn.SetReadDeadline(time.Now().Add(time.Second))
 	reader := bufio.NewReader(conn)
-	line, _, _ := reader.ReadLine()
-	return string(line)
+
+	var sb strings.Builder
+	for {
+		line, er := reader.ReadString('\n')
+		if er != nil {
+			break
+		}
+
+		line = strings.TrimSpace(line);
+		if len(line) == 0 {
+			continue
+		}
+		if strings.Contains(line, "room") {
+			sb.WriteString(line)
+			break
+		}
+		sb.WriteString(line)
+		sb.WriteString(", ")
+	}
+	return sb.String()
+}
+
+func makeProm() []byte {
+	return []byte(fmt.Sprintf("\r\n%s >", time.Now().Format("15:04:05")))
 }

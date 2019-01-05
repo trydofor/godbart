@@ -17,7 +17,7 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi, mask, r
 
 	mreg, err := regexp.Compile(mask)
 	if err != nil {
-		LogError("failed to compile mask=%s, err=%v", mask, err)
+		LogFatal("failed to compile mask=%s, err=%v", mask, err)
 		return err
 	}
 
@@ -150,14 +150,14 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi, mask, r
 	// 多库并发，单库有序
 	for i := 0; i < cnln; i++ {
 		con := conn[i]
-		var runner = func() {
+		var gogo = func() {
 			defer wg.Done()
 			ReviEach(pref, reviSegs, con, reviSlt, mreg, risk)
 		}
 		if risk {
-			go runner()
+			go gogo()
 		} else {
-			runner()
+			gogo()
 		}
 	}
 

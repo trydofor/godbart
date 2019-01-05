@@ -39,7 +39,7 @@ func Exec(pref *Preference, dest []*DataSource, file []FileEntity, risk bool) er
 	for i := 0; i < cnln; i++ {
 		cur, con := 0, conn[i]
 
-		var runner = func() {
+		var gogo = func() {
 			defer wg.Done()
 			for j := 0; j < flln; j++ {
 				pcnt, sqlj := 0, sqls[j]
@@ -56,9 +56,9 @@ func Exec(pref *Preference, dest []*DataSource, file []FileEntity, risk bool) er
 		}
 
 		if risk {
-			go runner()
+			go gogo()
 		} else {
-			runner()
+			gogo()
 		}
 	}
 

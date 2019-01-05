@@ -1,11 +1,14 @@
+-- VAR now 'TIME-NOW'
+SELECT NOW() as now;
+
 -- REF id 'A.id'
 SELECT id FROM A;
 
 -- REF ib 'B.id'
-SELECT id FROM B where aid = 'A.id'
+SELECT id FROM B where aid = 'A.id' and upd < 'TIME-NOW'
 
 -- REF ib 'C.id'
-SELECT id FROM C where bid = 'B.id'
+SELECT id FROM C where bid = 'B.id' and upd < 'TIME-NOW'
 
 -- RUN FOR 'A.id'  调整分叉
 SELECT id FROM D where bid = 'B.id' and aid = 'A.id'
