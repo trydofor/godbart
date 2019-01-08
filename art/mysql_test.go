@@ -2,6 +2,7 @@ package art
 
 import (
 	"database/sql"
+	"fmt"
 	"github.com/go-sql-driver/mysql"
 	"reflect"
 	"strings"
@@ -105,4 +106,13 @@ func Test_Query(t *testing.T) {
 		}
 		return nil
 	}, "select create_time from tx_parcel")
+}
+
+func Test_Mdb(t *testing.T) {
+	conn := MyConn{}
+	panicIfErr(conn.Open(pref, dsrc))
+
+	i, e := conn.Exec(`replace into godbart_prd_2018.sys_schema_version select * from sys_schema_version`)
+	fmt.Printf("%d, %#v", i, e)
+
 }

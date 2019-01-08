@@ -1,7 +1,11 @@
 package art
 
 import (
+	"database/sql"
+	"fmt"
 	"regexp"
+	"strings"
+	"sync"
 )
 
 func Sync(srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regexp) error {
@@ -22,6 +26,88 @@ func Sync(srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regex
 	tbls, err := listTable(scon, rgx);
 	if err != nil {
 		return err
+	}
+
+	if kind == SyncRow {
+		type udp struct {
+			tbln string
+			stms string
+			vals []interface{}
+		}
+
+		chns := make([]chan *udp, len(dest))
+
+		wg := &sync.WaitGroup{}
+		for i, db := range dest {
+			conn, er := openDbAndLog(db)
+			if er != nil {
+				return er
+			}
+
+			chns[i] = make(chan *udp, 5)
+			idb, icn := db.Code, chns[i]
+			wg.Add(1)
+			go func() {
+				for i := 1; ; i++ {
+					u := <-icn
+					if len(u.stms) == 0 {
+						LogTrace("end %d rows database=%s", i, idb)
+						wg.Done()
+						return
+					}
+					a, e := conn.Exec(u.stms, u.vals...)
+					if e != nil {
+						LogError("failed to sync %d-th row on db=%s, table=%s, err=%v", i, idb, u.tbln, e)
+					} else {
+						logDebug("inserted %d-th row affects %d, db=%s, table=%s", i, a, idb, u.tbln)
+					}
+				}
+			}()
+		}
+
+		tbln := len(tbls)
+		for i, v := range tbls {
+			LogTrace("%d/%d tables", i+1, tbln)
+			var ff = func(row *sql.Rows) error {
+				cols, er := row.Columns()
+				if er != nil {
+					return er
+				}
+
+				for ln, cnt := len(cols), 1; row.Next(); cnt++ {
+					vals := make([]interface{}, ln)
+					ptrs := make([]interface{}, ln)
+					for i := 0; i < ln; i++ {
+						ptrs[i] = &vals[i]
+					}
+
+					row.Scan(ptrs...)
+					u := &udp{
+						v,
+						fmt.Sprintf("insert into %s values(%s)", v, strings.Repeat(",?", ln)[1:]),
+						vals,
+					}
+					logDebug("sync %d row of table=%s", cnt, v)
+					for _, c := range chns {
+						c <- u
+					}
+				}
+				return nil
+			}
+			er := scon.Query(ff, "select * from "+v)
+			if er != nil {
+				LogError("sync data failed, table=%s, err=%v", v, er)
+				return er
+			}
+		}
+		// END
+		u := &udp{}
+		for _, c := range chns {
+			c <- u
+		}
+		LogTrace("waiting for sync done")
+		wg.Wait()
+		return nil
 	}
 
 	if kind == SyncAll || kind == SyncTbl {

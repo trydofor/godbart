@@ -290,13 +290,13 @@ func main() {
 
 	difkFlag := &cli.StringFlag{
 		Name:  "t",
-		Usage: "diff (T)ype, `tbl?`. [all:col+idx+trg | ddl:ddl for table+trigger |tbl: table name.]",
+		Usage: "diff (T)ype,`type?` in,\n\tall:col+idx+trg\n\tcol:without trigger\n\ttbl:table name\n\tddl:ddl for table+trigger\n\t",
 		Value: "tbl",
 	}
 
 	synkFlag := &cli.StringFlag{
 		Name:  "t",
-		Usage: "sync (T)ype `all?`. [all:col+idx+trg | trg:trigger | tbl:col+idx]",
+		Usage: "sync (T)ype `type?` in,\n\tall:col+idx+trg\n\ttrg:trigger\n\ttbl:col+idx\n\trow:sync data\n\t",
 		Value: "tbl",
 	}
 
@@ -356,7 +356,7 @@ func main() {
 		},
 		{
 			Name:      "sync",
-			Usage:     "create table d.A like s.B",
+			Usage:     "create table d.A like s.B or sync small data",
 			ArgsUsage: "tables to sync (regexp/i). empty means all",
 			Flags: []cli.Flag{
 				confFlag,

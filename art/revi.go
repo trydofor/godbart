@@ -202,7 +202,7 @@ func ReviEach(pref *Preference, revs []ReviSeg, conn Conn, slt string, mask *reg
 
 	err := conn.Query(slv, slt)
 	if err != nil {
-		if strings.Contains(err.Error(), "1146") {
+		if strings.Contains(err.Error(), "exist") {
 			LogTrace("Table not exist, db=%s use sql=%s", conn.DbName(), slt)
 		} else {
 			LogError("failed to select revision on db=%s use sql=%s, err=%v", conn.DbName(), slt, err)

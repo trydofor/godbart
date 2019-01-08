@@ -58,7 +58,8 @@ func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, r
 		return err
 	}
 
-	detail := kind == DiffAll
+	detail := kind != DiffTbl
+	hastrg := kind == DiffAll
 	sdtl := make(map[string]DiffItem)
 
 	for _, con := range dcon {
@@ -100,13 +101,13 @@ func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, r
 		if detail {
 			LogTrace("=== diff detail ===, left=%s, right=%s", scon.DbName(), con.DbName())
 
-			e1 := makeDetail(scon, ih, sdtl) // 比较多库，逐步添加表
+			e1 := makeDetail(scon, ih, sdtl, hastrg) // 比较多库，逐步添加表
 			if e1 != nil {
 				return e1
 			}
 
 			ddtl := make(map[string]DiffItem) // 当前比较项
-			e2 := makeDetail(con, ih, ddtl)
+			e2 := makeDetail(con, ih, ddtl, hastrg)
 			if e2 != nil {
 				return e2
 			}
@@ -125,7 +126,7 @@ func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, r
 	return nil
 }
 
-func makeDetail(con *MyConn, tbl []string, dtl map[string]DiffItem) error {
+func makeDetail(con *MyConn, tbl []string, dtl map[string]DiffItem, trg bool) error {
 	for _, t := range tbl {
 		_, ok := dtl[t]
 		if !ok {
@@ -140,10 +141,13 @@ func makeDetail(con *MyConn, tbl []string, dtl map[string]DiffItem) error {
 				return err
 			}
 
-			tgs, err := con.Triggers(t)
-			if err != nil {
-				LogError("failed to list triggers, table=%s, db=%s, err=%v", t, con.DbName(), err)
-				return err
+			var tgs map[string]Trg
+			if trg {
+				tgs, err = con.Triggers(t)
+				if err != nil {
+					LogError("failed to list triggers, table=%s, db=%s, err=%v", t, con.DbName(), err)
+					return err
+				}
 			}
 
 			dtl[t] = DiffItem{cls, ixs, tgs}
@@ -153,6 +157,10 @@ func makeDetail(con *MyConn, tbl []string, dtl map[string]DiffItem) error {
 }
 
 func diffCol(lc, rc map[string]Col, rep *strings.Builder) {
+	if len(lc) == 0 && len(rc) == 0 {
+		return
+	}
+
 	var ic []Col
 	// 左侧有，右侧没有
 
@@ -260,12 +268,16 @@ func diffCol(lc, rc map[string]Col, rep *strings.Builder) {
 				ih = false
 				rep.WriteString(strings.Replace(head, "Only", "Diff", 1))
 			}
-			rep.WriteString(fmt.Sprintf(fmtb, li.Name, seq, typ, nul, dft, cmt, ext))
+			rep.WriteString(fmt.Sprintf(fmtb, "!"+li.Name, seq, typ, nul, dft, cmt, ext))
 		}
 	}
 }
 
 func diffIdx(lc, rc map[string]Idx, rep *strings.Builder) {
+	if len(lc) == 0 && len(rc) == 0 {
+		return
+	}
+
 	var ic []Idx
 	// 左侧有，右侧没有
 	ch, ih := true, true
@@ -335,12 +347,16 @@ func diffIdx(lc, rc map[string]Idx, rep *strings.Builder) {
 				ih = false
 				rep.WriteString(strings.Replace(head, "Only", "Diff", 1))
 			}
-			rep.WriteString(fmt.Sprintf(fmtb, li.Name, typ, unq, cols))
+			rep.WriteString(fmt.Sprintf(fmtb, "!"+li.Name, typ, unq, cols))
 		}
 	}
 }
 
 func diffTrg(lc, rc map[string]Trg, rep *strings.Builder) {
+	if len(lc) == 0 && len(rc) == 0 {
+		return
+	}
+
 	var ic []Trg
 	// 左侧有，右侧没有
 	ch, ih := true, true
@@ -406,7 +422,7 @@ func diffTrg(lc, rc map[string]Trg, rep *strings.Builder) {
 				ih = false
 				rep.WriteString(strings.Replace(head, "Only", "Diff", 1))
 			}
-			rep.WriteString(fmt.Sprintf(fmtb, li.Name, tim, evt, stm))
+			rep.WriteString(fmt.Sprintf(fmtb, "!"+li.Name, tim, evt, stm))
 		}
 	}
 }

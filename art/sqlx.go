@@ -9,10 +9,10 @@ import (
 
 const (
 	//
-	magicA9 = ">a9+yeah+j7<ivy"
+	magicA9 = "${>a9+yeah+j7<ivy}"
 	magicJ7 = "@"
-	magicDs = magicA9 + magicJ7 + EnvSrcDb
-	magicDo = magicA9 + magicJ7 + EnvOutDb
+	magicDs = magicA9 + magicJ7 + EnvSrcDb // need prefix
+	magicDo = magicA9 + magicJ7 + EnvOutDb // need prefix
 
 	HoldTop = "ITSELF"
 	//

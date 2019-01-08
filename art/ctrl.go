@@ -311,34 +311,41 @@ func (room *Room) gogoTalk() {
 		bytesProm := makeProm()
 		if strings.HasPrefix(info, "/") {
 			info = strings.TrimSpace(info[1:])
-			var s, r net.Conn
-			l := 0
+			var to, fr net.Conn
+			var tu, fu string
 			room.user.Range(func(k, v interface{}) bool {
 				user := k.(string)
 				if strings.HasPrefix(info, user) {
-					l = len(user)
-					s = v.(net.Conn)
+					to = v.(net.Conn)
+					tu = user
 				}
 				if strings.HasSuffix(info, user) {
-					r = v.(net.Conn)
+					fr = v.(net.Conn)
+					fu = user
 				}
 				return true
 			})
 
-			if s != nil {
-				msg := []byte(strings.TrimSpace(info[l:] + "*"))
-				s.Write(msg)
-				s.Write(bytesProm)
-				r.Write(msg)
-				r.Write(bytesProm)
-				continue
+			if to != nil {
+				info = "**" + info + "**"
+				to.Write([]byte(strings.Replace(info, tu, "(*you*)", -1)))
+				to.Write(bytesProm)
 			}
+			if fr != nil {
+				fr.Write([]byte(strings.Replace(info, fu, "(*you*)", -1)))
+				fr.Write(bytesProm)
+			}
+			continue
 		}
 
 		msgs := []byte(info)
 		room.user.Range(func(k, v interface{}) bool {
 			conn := v.(net.Conn)
-			conn.Write(msgs)
+			if ks, ok := k.(string); ok && strings.Contains(info, ks) {
+				conn.Write([]byte(strings.Replace(info, ks, "(*you*)", -1)))
+			} else {
+				conn.Write(msgs)
+			}
 			conn.Write(bytesProm)
 			return true
 		})

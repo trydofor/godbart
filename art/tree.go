@@ -383,6 +383,9 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) error 
 			return er
 		}
 	} else {
+		if lvl == 1 {
+			para.cnttop++
+		}
 		rsrc, rout := takeSrcOutAct(exe)
 		dcnt := len(dst)
 		if para.agreed {
@@ -405,7 +408,7 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) error 
 						logDebug("replace out-db at %d with %s", d, dboName)
 						vals[d] = dboName
 					}
-					logDebug("running on OUT[%d/%d] db=%s", i+1, dcnt, dboName)
+					logDebug("running on OUT[%d/%d] db=%s, stmt=%q", i+1, dcnt, dboName, otmt)
 					if a, e := db.Exec(otmt, vals...); e != nil {
 						LogError("failed on [%d/%d]OUT=%s, id=%d, lvl=%d, err=%v", i+1, dcnt, dboName, head, lvl, e)
 						return e

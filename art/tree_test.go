@@ -9,6 +9,6 @@ func Test_Tree(t *testing.T) {
 	envs["DATE_FROM"] = "2018-01-01 01:01:01"
 	envs[EnvRule] = EnvRuleEmpty
 	BuiltinEnvs(envs)
-	file := makeFileEntity("../demo/sql/tree/test.sql")
+	file := makeFileEntity("../demo/sql/tree/renv.sql")
 	Tree(pref, envs, dsrc, dstt, file, false)
 }

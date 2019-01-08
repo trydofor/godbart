@@ -148,8 +148,9 @@ REPLACE INTO sys_schema_version (version, created) VALUES( 2018022801, NOW());
  * `-d` 右侧比较相，可以零或多。
  * `-k` 比较类型，支持以下三种，默认`tbl`。
     - `ddl` 生成多库的创建DDL(table&index，trigger)
-    - `all` 分别对比`-s`和多个`-d` 间的表明细(column, index, trigger)
-    - `tbl` 分别对比`-s`和多个`-d` 间的表名差异
+    - `all` 表明细(column, index, trigger)
+    - `col` 比较表名，字段和索引（不比较trigger）
+    - `tbl` 表名差异
 
 参数为需要对比的表的名字的正则表达式。如果参数为空，表示所有表。
 只有一个库时，仅打印该库，多个时才进行比较。
@@ -158,6 +159,8 @@ REPLACE INTO sys_schema_version (version, created) VALUES( 2018022801, NOW());
 
 同步多库间的表结构，目前只支持空表创建。此场景一般出现在初始化一个新数据库的时候。
 因为数据库版本管理不会造成很大差异，如果存在差异，且有数据的情况下，人工介入更好。
+
+对于小表，提供数据同步。而多实例，大表，建议使用DBA的方式同步，性能更好。
 
 注意，对于DBA，可以使用`mysqldump -d`来导出表结构。
 
@@ -176,6 +179,7 @@ REPLACE INTO sys_schema_version (version, created) VALUES( 2018022801, NOW());
     - `tbl` 只创建表和索引
     - `trg` 只创建trigger
     - `all` 完全创建(column, index, trigger)
+    - `row` 标准insert语法，并忽略重复，不如DBA脚本猛烈，适合小数据。
  * `--agree` 选填，风险自负，真正执行。
 
 参数为需要对比的表的名字的正则表达式。如果参数为空，表示所有表。
@@ -763,9 +767,11 @@ WHERE
 
 ### 4.５. 全部同步
 
-有些小表或功能表，可以全部同步或备份，可使用正则替换以下模板。
+可以使用 `sync -t row` 进行小表的数据同步，也可以使用 `tree`的以下脚本。
+这些脚本可以使用正则进行批量生成，参考`攻城狮朋友圈`正则分享。
+
 ```mysql
--- STR OUT-DB OUTDB
+-- STR SRC-DB SRCDB
 -- VAR checked_id 'tx_sender.checked_id'
 select checked_id from sys_hot_separation where table_name = 'tx_sender';
 
@@ -773,8 +779,8 @@ select checked_id from sys_hot_separation where table_name = 'tx_sender';
 select max(id) as max_id from tx_sender where id > 'tx_sender.checked_id';
 
 -- OUT FOR 'tx_sender.max_id'
-replace into OUTDB.tx_sender
-  select * from tx_sender
+replace into tx_sender
+  select * from SRCDB.tx_sender
   where id > 'tx_sender.checked_id' and id <= 'tx_sender.max_id';
 
 -- RUN FOR 'tx_sender.max_id'
@@ -813,6 +819,18 @@ ORDER BY
 静态分析，第一步，要执行sqlx命令，分析树结构。第二部，不带agree参数在db上执行以下，看debug日志。
 运行时监控，使用控制端口，telnet连接过去，使用`stat|wait|tree`命令，还有本机日志。
 
+### 4.8. 使用`tree`做版本更新
+
+除了`revi`，使用`tree`的`VAR和RUN FOR`也可以完成版本更新的。
+
+```mysql
+-- VAR VER v2019010302
+SELECT MAX(version) as VER FROM sys_schema_version WHERE version = 2019010302;
+-- RUN NOT v2019010302
+ALTER TABLE tx_parcel ADD CONSTRAINT uk_track_num UNIQUE (is_deleted, track_num);
+-- RUN NOT v2019010302
+REPLACE INTO sys_schema_version (version, created) VALUES(2019010302, NOW());
+```
 
 ## 5. 不想理你的问题
 
@@ -833,4 +851,5 @@ ORDER BY
   
 * Q04：数据树迁移的吞吐量/性能如何？
   - 坏消息是吞吐量不太好，好消息是不占资源。
-  - 实测一棵4层100条SQL的数据树，同机同实例千万数据，每秒迁移2.8棵树。
+  - 实测一棵4层100条SQL的数据树，同机同实例千万数据，每秒迁移10.87棵树。
+  - 速度依赖于sql索引，golang层面提升不大。
