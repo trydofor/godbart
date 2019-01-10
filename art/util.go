@@ -46,3 +46,11 @@ func countQuotePair(str string) (cnt int) {
 	}
 	return
 }
+
+func matchEntire(reg *regexp.Regexp, str string) bool {
+	ps := reg.FindStringIndex(str)
+	if len(ps) != 2 {
+		return false
+	}
+	return ps[0] == 0 && ps[1] == len(str)
+}

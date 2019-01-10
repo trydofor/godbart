@@ -3,8 +3,8 @@
 
 -- REF id 'tx_parcel.id'  #提取 id，作为'tx_parcel.id'节点
 -- REF recver_id 'tx_parcel.recver_id' # 999777前缀，0001第一个SELECT，002，第二个REF
--- REF track_num ''tx_parcel.track_num'' #提取 id，作为'tx_parcel.track_num'节点
--- REF `中文字段` ''tx_parcel.chinese-404'' #假设存在，不存在且没引用不报错。
+-- REF track_num 'tx_parcel.track_num' #提取 id，作为'tx_parcel.track_num'节点
+-- REF `中文字段` 'tx_parcel.chinese-404' #假设存在，不存在且没引用不报错。
 -- STR VAL[] 'tx_parcel.VALS'
 SELECT * FROM tx_parcel WHERE create_time <= 'ENV_DATE_FROM';
 
@@ -16,9 +16,9 @@ DELETE FROM tx_parcel where id = 'tx_parcel.id';
 
 
 -- REF id 'tx_track.id' #提取id，作为'tx_track.id'节点，父节点为'tx_parcel.track_num'
--- STR ''tx_parcel.track_num'' $TRK
+-- STR 'tx_parcel.track_num' $TRK
 -- STR VAL[] 'tx_track.VALS'
-SELECT * FROM tx_track WHERE track_num = ''tx_parcel.track_num'';
+SELECT * FROM tx_track WHERE track_num = 'tx_parcel.track_num';
 
 -- OUT FOR 'tx_track.id'
 REPLACE INTO tx_track VALUES ('tx_track.VALS');

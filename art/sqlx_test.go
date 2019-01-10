@@ -9,9 +9,10 @@ import (
 
 func Test_ParseSqlx(t *testing.T) {
 
-	MsgLevel=LvlTrace
+	//MsgLevel=LvlTrace
 	//file := "../demo/sql/tree/test.sql"
-	file := "../demo/sql/tree/tree.sql"
+	//file := "../demo/sql/tree/tree.sql"
+	file := "../demo/sql/tree/stbl.sql"
 	//file := "../demo/sql/init/1.table.sql"
 	bytes, err := ioutil.ReadFile(file)
 	panicIfErr(err)

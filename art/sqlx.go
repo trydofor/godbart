@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -20,6 +21,8 @@ const (
 	CmndVar = "VAR"
 	CmndRef = "REF"
 	CmndStr = "STR"
+	CmndSeq = "SEQ"
+	CmndTbl = "TBL"
 	CmndRun = "RUN"
 	CmndOut = "OUT"
 	//
@@ -30,7 +33,7 @@ const (
 	ParaNot = "NOT"
 )
 
-var cmdArrs = []string{CmndEnv, CmndVar, CmndRef, CmndStr, CmndRun, CmndOut}
+var cmdArrs = []string{CmndEnv, CmndVar, CmndRef, CmndStr, CmndSeq, CmndTbl, CmndRun, CmndOut}
 
 var argsReg = regexp.MustCompile(`(?i)` + // 不区分大小写
 	`^[^0-9A-Z]*` + // 非英数开头，视为注释部分
@@ -46,30 +49,38 @@ type SqlExe struct {
 type Exe struct {
 	Seg Sql // 对应的SQL片段
 
+	// 循环
+	Fors []*Arg // SEQ,TBL产生循环
 	// 产出
-	Defs map[string]string // REF|STR的提取，key=HOLD,val=PARA
+	Refs map[string]string // REF|STR的提取，key=HOLD,val=PARA
 	// 行为
 	Acts []*Arg // 源库RUN & OUT
-
 	// 依赖，顺序重要
 	Deps []*Hld // 依赖
-
 	// 运行，深度优先L
 	Sons []*Exe // 分叉
 }
 
 type Arg struct {
-	Line string // 开始和结束行，全闭区间
-	Head int    // 首行
-	Type string // 参数类型 Cmnd*
-	Para string // 变量名
-	Hold string // 占位符
+	Line string      // 开始和结束行，全闭区间
+	Head int         // 首行
+	Type string      // 参数类型 Cmnd*
+	Para string      // 变量名
+	Hold string      // 占位符
+	Gift interface{} // 附加对象（解析物，关联物）
+}
+
+type GiftSeq struct {
+	Bgn int    // 开始
+	End int    // 结束
+	Inc int    // 步长
+	Fmt string // 格式
 }
 
 type Hld struct {
 	Off int    // 开始位置，包含
 	End int    // 结束位置，包括
-	Ptn string // PARA的模式
+	Arg *Arg   // 对应的Arg
 	Str string // HOLD字符串
 	Dyn bool   // true：动态替换；false：静态替换
 }
@@ -87,26 +98,26 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 	argx := make(map[string]*Arg)   // hold对应的Arg
 	envx := make(map[string]string) // hold对应的ENV
 
-	sonFunc := func(prn, exe *Exe, top *bool) {
-		h := true
-
-		for i := len(prn.Sons) - 1; i >= 0; i-- {
-			if prn.Sons[i].Seg.Head == exe.Seg.Head {
-				h = false
+	linkBase := func(base, cur *Exe) {
+		not := true
+		for i := len(base.Sons) - 1; i >= 0; i-- {
+			if base.Sons[i].Seg.Head == cur.Seg.Head {
+				not = false
 				break
 			}
 		}
-
-		if h {
-			prn.Sons = append(prn.Sons, exe)
+		if not {
+			base.Sons = append(base.Sons, cur)
 		}
-		*top = false
 	}
 
 	iarg := -1
+	sqlChk := make(map[int]int)
 	for i, seg := range sqls {
-		// 解析指令
-		if !seg.Exeb {
+
+		if seg.Exeb {
+			sqlChk[seg.Head] = 0
+		} else { // 解析指令
 			if iarg < 0 {
 				iarg = i
 			}
@@ -114,8 +125,11 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 			for _, gx := range ags {
 				lineArg[seg.Line] = append(lineArg[seg.Line], gx)
 				// 定义指令，检测重复
-				logDebug("parsed Arg=%#v", gx)
-				if gx.Type == CmndEnv || gx.Type == CmndVar || gx.Type == CmndRef || gx.Type == CmndStr {
+				logDebug("parsed Arg=%s", gx)
+
+				if gx.Type == CmndRun || gx.Type == CmndOut {
+					// 允许重复，不检查
+				} else {
 					od, ok := argx[gx.Hold]
 					if ok {
 						return nil, errorAndLog("duplicate HOLD=%s, line1=%d, line2=%d, file=%s", gx.Hold, od.Head, gx.Head, seg.File)
@@ -132,9 +146,10 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 
 		logDebug("build an Exe, line=%s, file=%s", seg.Line, seg.File)
 
-		// 挂树
+		// 解析
+		var fors []*Arg
 		if iarg >= 0 { //有注释的
-			defs := make(map[string]string)
+			refs := make(map[string]string)
 			rule := envs[EnvRule]
 			for j := iarg; j < i; j++ {
 				if arg, ok := lineArg[sqls[j].Line]; ok {
@@ -166,11 +181,51 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 									}
 								}
 							}
+						case CmndSeq:
+							// parse tx_test_%02d[1,20]
+							p1 := strings.LastIndexByte(gx.Para, '[')
+							p2 := strings.LastIndexByte(gx.Para, ']')
+							if p2 <= p1 {
+								return nil, errorAndLog("Bad format of SEQ. arg=%s, file=%s", gx, seg.File)
+							}
+							sp := strings.SplitN(gx.Para[p1+1:p2], ",", 3)
+							ln := len(sp)
+							if ln < 2 {
+								return nil, errorAndLog("Bad format of SEQ, need [s,e,i]. arg=%s, file=%s", gx, seg.File)
+							}
+							it := make([]int, 3)
+							for i, v := range sp {
+								ip, er := strconv.ParseInt(strings.TrimSpace(v), 10, 32)
+								if er != nil {
+									return nil, errorAndLog("Bad format of SEQ, failed to parse int. arg=%s, file=%s, err=%#v", gx, seg.File, er)
+								}
+								it[i] = int(ip)
+							}
+							if ln == 2 {
+								it[2] = 1
+							}
+
+							gx.Gift = GiftSeq{it[0], it[1], it[2], strings.TrimSpace(gx.Para[0:p1])}
+
+							holdExe[gx.Hold] = exe
+							holdStr[gx.Hold] = true
+							fors = append(fors, gx)
+							logDebug("appended Exe's SEQ, line=%d, para=%s, gift=%#v", gx.Head, gx.Para, gx.Gift)
+						case CmndTbl:
+							reg, er := regexp.Compile(gx.Para)
+							if er != nil {
+								return nil, errorAndLog("Bad format of TBL, failed to compile regexp. arg=%s, file=%s, err=%#v", gx, seg.File, er)
+							}
+							gx.Gift = reg
+							holdExe[gx.Hold] = exe
+							holdStr[gx.Hold] = true
+							fors = append(fors, gx)
+							logDebug("appended Exe's TBL, line=%d, para=%s", gx.Head, gx.Para)
 						case CmndVar:
-							defs[gx.Hold] = gx.Para
+							refs[gx.Hold] = gx.Para
 							logDebug("appended Exe's VAR, Arg's line=%d, para=%s, hold=%s", gx.Head, gx.Para, gx.Hold)
 						case CmndRef:
-							defs[gx.Hold] = gx.Para
+							refs[gx.Hold] = gx.Para
 							holdExe[gx.Hold] = exe
 							logDebug("appended Exe's REF, Arg's line=%d, para=%s, hold=%s", gx.Head, gx.Para, gx.Hold)
 						case CmndStr:
@@ -197,7 +252,7 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 									}
 								} else { // REF
 									holdExe[gx.Hold] = exe
-									defs[gx.Hold] = gx.Para
+									refs[gx.Hold] = gx.Para
 									logDebug("appended Exe's STR def REF, Arg's line=%d, hold=%s", gx.Head, gx.Hold)
 								}
 							} else { // 重新定义
@@ -218,16 +273,18 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 											}
 										}
 									}
-								} else { // REF
+								} else if rg.Type == CmndRef { // REF
 									if ex, kx := holdExe[gx.Para]; kx {
 										holdExe[gx.Hold] = ex
-										tx := &Arg{gx.Line, gx.Head, gx.Type, rg.Para, gx.Hold}
+										tx := &Arg{gx.Line, gx.Head, gx.Type, rg.Para, gx.Hold, rg}
 										argx[gx.Hold] = tx
-										ex.Defs[gx.Hold] = rg.Para
+										ex.Refs[gx.Hold] = rg.Para
 										logDebug("appended Exe's STR redef REF, From=%d, To=%d, para=%s", gx.Head, rg.Head, rg.Para)
 									} else {
 										return nil, errorAndLog("STR redefine REF not found. para=%s, line=%d, file=%s", gx.Para, gx.Head, seg.File)
 									}
+								} else {
+									return nil, errorAndLog("unsupported STR redefine. para=%s, line=%d, file=%s", gx.Para, gx.Head, seg.File)
 								}
 							}
 						case CmndRun, CmndOut:
@@ -237,11 +294,12 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 					}
 				}
 			}
-			if len(defs) > 0 {
-				exe.Defs = defs
+			if len(refs) > 0 {
+				exe.Refs = refs
 			}
 			iarg = -1
 		}
+		exe.Fors = fors
 
 		// 分析HOLD依赖
 		var deps []*Hld // HOLD依赖
@@ -254,7 +312,7 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 				}
 
 				off = off + p // 更新位置
-				deps = append(deps, &Hld{off, off + lln, ag.Para, hd, !holdStr[hd]})
+				deps = append(deps, &Hld{off, off + lln, ag, hd, !holdStr[hd]})
 				// 引用计数
 				holdCnt[hd] = holdCnt[hd] + 1
 
@@ -266,12 +324,15 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 		})
 		exe.Deps = deps
 
-		// 挂树
-		top := true
+		// 挂树， 寻到一个即可
+		// 优先级 RUN|OUT > REF > SEQ|TBL
+		isTop := true
+		// 优先级 10，支持多父，RUN|OUT
 		for _, v := range exe.Acts {
 			if pa, ok := holdExe[v.Hold]; ok {
-				sonFunc(pa, exe, &top)
+				linkBase(pa, exe)
 				logDebug("bind %s parent, hold=%s, parent=%s, child=%s", v.Type, v.Hold, pa.Seg.Line, exe.Seg.Line)
+				isTop = false
 				continue
 			}
 
@@ -284,18 +345,41 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 			}
 		}
 
-		if top {
+		// 优先级 单父, 20 REF|STR, 30 SEQ|TBL
+		if isTop {
+			var b20, b30 *Exe
+			var h20, h30 string
 			for _, v := range exe.Deps {
-				pa, ok := holdExe[v.Str]
-				if ok { // REF|STR HOLD
-					sonFunc(pa, exe, &top)
-					logDebug("bind DEP parent, hold=%s, parent=%s, child=%s", v.Str, pa.Seg.Line, exe.Seg.Line)
+				if pa, ok := holdExe[v.Str]; ok && exe.Seg.Head != pa.Seg.Head {
+					typ := v.Arg.Type
+					if (typ == CmndStr || typ == CmndRef) && (b20 == nil || b20.Seg.Head < pa.Seg.Head) {
+						b20 = pa
+						h20 = v.Str
+						continue
+					}
+					if (typ == CmndSeq || typ == CmndTbl) && (b30 == nil || b30.Seg.Head < pa.Seg.Head) {
+						b30 = pa
+						h30 = v.Str
+						continue
+					}
 				}
+			}
+
+			bs, hs := b30, h30
+			if b20 != nil {
+				bs, hs = b20, h20
+			}
+
+			if bs != nil {
+				linkBase(bs, exe)
+				logDebug("bind DEP parent, parent=%s, child=%s, by hold=%s", bs.Seg.Line, exe.Seg.Line, hs)
+				isTop = false
 			}
 		}
 
-		// 检查是否多库DEF
-		if len(exe.Defs) > 0 {
+		// post check current
+		// 检查是否多库 OUT Def
+		if len(exe.Refs) > 0 || len(exe.Fors) > 0 {
 			for _, v := range exe.Acts {
 				if v.Type == CmndOut {
 					return nil, errorAndLog("OUT used on Defs(REF,STR), seg=%#v", exe.Seg)
@@ -303,8 +387,9 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 			}
 		}
 
-		if top {
+		if isTop {
 			tops = append(tops, exe)
+			logDebug("append top exe head=%d", exe.Seg.Head)
 		}
 
 		alls = append(alls, exe)
@@ -318,7 +403,7 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 		}
 
 		if exe, ok := holdExe[hd]; ok {
-			delete(exe.Defs, hd)
+			delete(exe.Refs, hd)
 			LogTrace("remove unused REF|STR, arg=%#v", argx[hd])
 		}
 	}
@@ -332,19 +417,64 @@ func ParseSqlx(sqls Sqls, envs map[string]string) (*SqlExe, error) {
 		}
 	}
 
-	LogTrace("built a SQLX")
+	// post check
+	postCheck(tops, sqlChk)
+	postBad := false
+	for k, v := range sqlChk {
+		if v != 1 {
+			postBad = true
+			if v < 0 {
+				LogError("exe from nil sql, line=%d", k)
+			} else {
+				LogError("sql to more exe, line=%d", k)
+			}
+		}
+	}
 
+	if postBad {
+		return nil, errorAndLog("failed to post check")
+	}
+
+	LogTrace("built a SQLX")
 	sqlx := &SqlExe{envx, tops}
 	return sqlx, nil
 }
 
-func (x Exe) String() string {
+func (h *Hld) String() string {
+	return fmt.Sprintf("Hld{Off:%d, End:%d, Arg.head:%d, Dyn:%t, Str:%q}",
+		h.Off,
+		h.End,
+		h.Arg.Head,
+		h.Dyn,
+		h.Str,
+	)
+}
+
+func (h *Arg) String() string {
+	return fmt.Sprintf("Arg{Head:%d, Type:%s, Para:%s, Hold:%s, Gift-nil:%t}",
+		h.Head,
+		h.Type,
+		h.Para,
+		h.Hold,
+		h.Gift == nil,
+	)
+}
+
+func (x *Exe) String() string {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("\n{\nSql:%#v", x.Seg))
 
-	if len(x.Defs) > 0 {
-		sb.WriteString(" \nDefs:[")
-		for h, p := range x.Defs {
+	if len(x.Fors) > 0 {
+		sb.WriteString(" \nFors:[")
+		for h, p := range x.Fors {
+			sb.WriteString(fmt.Sprintf("\n   hold:%d, arg:%s", h, p))
+		}
+		sb.WriteString("]")
+	}
+
+	if len(x.Refs) > 0 {
+		sb.WriteString(" \nRefs:[")
+		for h, p := range x.Refs {
 			sb.WriteString(fmt.Sprintf("\n   hold:%s, para:%s", h, p))
 		}
 		sb.WriteString("]")
@@ -353,7 +483,7 @@ func (x Exe) String() string {
 	if len(x.Deps) > 0 {
 		sb.WriteString(" \nDeps:[")
 		for _, v := range x.Deps {
-			sb.WriteString(fmt.Sprintf("\n   %#v", v))
+			sb.WriteString(fmt.Sprintf("\n   %s", v))
 		}
 		sb.WriteString("]")
 	}
@@ -361,7 +491,7 @@ func (x Exe) String() string {
 	if len(x.Acts) > 0 {
 		sb.WriteString(" \nActs:[")
 		for i, v := range x.Acts {
-			sb.WriteString(fmt.Sprintf("\n   %d:%#v", i, *v))
+			sb.WriteString(fmt.Sprintf("\n   %d:%s", i, v))
 		}
 		sb.WriteString("]")
 	}
@@ -393,6 +523,17 @@ func (x *Exe) Tree() string {
 	return sb.String()
 }
 
+func postCheck(exes []*Exe, sqls map[int]int) {
+	for _, v := range exes {
+		if c, ok := sqls[v.Seg.Head]; ok {
+			sqls[v.Seg.Head] = c + 1
+		} else {
+			sqls[v.Seg.Head] = -1
+		}
+		postCheck(v.Sons, sqls)
+	}
+}
+
 func parseArgs(text string, h int) (args []*Arg) {
 	// 分析参数 ENV REF RUN
 	line := strings.Split(text, Joiner)
@@ -418,7 +559,7 @@ func parseArgs(text string, h int) (args []*Arg) {
 				}
 			}
 
-			arg := &Arg{ln, i + h, cmd, sm[2], sm[3]}
+			arg := &Arg{ln, i + h, cmd, sm[2], sm[3], nil}
 			args = append(args, arg)
 		}
 	}

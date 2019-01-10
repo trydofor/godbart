@@ -191,6 +191,7 @@ func sqlx(ctx *cli.Context) error {
 	checkMlvl(ctx)
 	conf := checkConf(ctx)
 	conf.StartupEnv = checkEnvs(ctx)
+	conf.StartupEnv["ENV-CHECK-RULE"] = "EMPTY"
 	sqls := checkSqls(ctx)
 	sqlx, err := art.ParseTree(&conf.Preference, conf.StartupEnv, sqls)
 	if err != nil {
@@ -224,7 +225,7 @@ func main() {
 	app := cli.NewApp()
 
 	app.Author = "github.com/trydofor"
-	app.Version = "0.9.6"
+	app.Version = "0.9.7"
 	app.Compiled = time.Now()
 
 	app.Name = "godbart"

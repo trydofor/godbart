@@ -10,6 +10,12 @@ import (
 	"time"
 )
 
+const (
+	magicMultipleValueExt = magicA9 + "MultipleValueExt"
+	magicDatabaseTypeName = magicA9 + "DatabaseTypeName"
+	magicDatabaseSrcTable = magicA9 + "DatabaseSrcTable"
+)
+
 func Tree(pref *Preference, envs map[string]string, srce *DataSource, dest []*DataSource, file []FileEntity, risk bool) error {
 
 	sqlx, err := ParseTree(pref, envs, file)
@@ -32,7 +38,7 @@ func Tree(pref *Preference, envs map[string]string, srce *DataSource, dest []*Da
 	}
 
 	for _, exe := range sqlx {
-		er := RunSqlx(pref, exe, scon, dcon, risk)
+		er := RunTreeSqlx(pref, exe, scon, dcon, risk)
 		if er != nil {
 			return er
 		}
@@ -125,7 +131,7 @@ type exeStat struct {
 	cntsrc int64
 }
 
-func RunSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, risk bool) error {
+func RunTreeSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, risk bool) error {
 
 	para := &exeStat{}
 	para.startd = time.Now()
@@ -193,16 +199,16 @@ func RunSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, risk bo
 	}
 
 	for _, exe := range sqlx.Exes {
-		er := runExe(exe, src, dst, para, 1)
+		er := runTreeExe(exe, src, dst, para, 1)
+		if er != nil {
+			return er
+		}
+
 		scnd := time.Now().Sub(para.startd).Seconds()
 		LogTrace("stats time=%.2fs, tree/s=%.2f, src/s=%.2f, dst/s=%.2f, trees=%d, select-row=%d, child-exe=%d, src-affect=%d, dst-affect=%d",
 			scnd, float64(para.cnttop)/scnd, float64(para.cntsrc)/scnd, float64(para.cntdst)/scnd,
 			para.cnttop, para.cntrow, para.cntson,
 			para.cntsrc, para.cntdst)
-
-		if er != nil {
-			return er
-		}
 	}
 
 	return nil
@@ -210,14 +216,86 @@ func RunSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, risk bo
 
 var defValCol = regexp.MustCompile(`(VAL|COL)\[([^\[\]]*)\]`)
 
-func runExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) error {
+func runTreeExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) (err error) {
 
 	// 判断数据源和执行条件
 	if arg, igr := skipHasNotRun(src, exe.Acts, para.valctx); igr {
-		logDebug("SKIP exe on Condition. arg=%d seg=%d", arg.Head, exe.Seg.Head)
-		return nil
+		logDebug("SKIP exe on Condition. arg=%d, seg=%d", arg.Head, exe.Seg.Head)
+		return
 	}
 
+	if len(exe.Fors) > 0 {
+		for i, arg := range exe.Fors {
+			logDebug("FOR exe [%d] on Arg=%s, exe=%d", i+1, arg, exe.Seg.Head)
+			var vals []string
+			switch arg.Type {
+			case CmndSeq:
+				gift := arg.Gift.(GiftSeq)
+				for j := gift.Bgn; j <= gift.End; j = j + gift.Inc {
+					v := fmt.Sprintf(gift.Fmt, j)
+					vals = append(vals, v)
+					logDebug("FOR SEQ on Arg=%d, exe=%d, seq=%s", arg.Head, exe.Seg.Head, v)
+				}
+			case CmndTbl:
+				tblKey := arg.Hold + magicDatabaseSrcTable
+				tbls, ok := para.valctx[tblKey]
+				if !ok {
+					tbls, err = src.Tables()
+					if err != nil {
+						return
+					}
+					para.valctx[tblKey] = tbls
+				}
+
+				reg := arg.Gift.(*regexp.Regexp)
+				for _, v := range tbls.([]string) {
+					if matchEntire(reg, v) {
+						vals = append(vals, v)
+						logDebug("FOR TBL on Arg=%d, exe=%d, table=%s", arg.Head, exe.Seg.Head, v)
+					}
+				}
+			default:
+				return errorAndLog("unsupported FOR arg=%s", arg);
+			}
+
+			// 遍历子树, ONE,FOR,END
+			head := exe.Seg.Head
+			cnt, ref := 0, len(exe.Refs)
+			for _, v := range vals {
+				cnt ++
+				LogTrace("FOR %s on Arg=%d, exe=%d, value=%s", arg.Type, arg.Head, exe.Seg.Head, v)
+				para.valctx[arg.Hold] = v
+				err = runOnceExe(exe, src, dst, para, lvl)
+				if err != nil {
+					return
+				}
+
+				// 遍历子树, ONE,FOR
+				if ref == 0 { // 存在REF引用，由REF处理
+					er := childFor(exe, src, dst, para, lvl, cnt)
+					if er != nil {
+						return er
+					}
+				}
+				// 每个记录一棵树
+				CtrlRoom.dealJobx(nil, head)
+			}
+			// 有记录时，遍历END子树
+			if ref == 0 {
+				er := childEnd(exe, src, dst, para, lvl, cnt)
+				if er != nil {
+					return er
+				}
+			}
+		}
+	} else {
+		err = runOnceExe(exe, src, dst, para, lvl)
+	}
+
+	return
+}
+
+func runOnceExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) error {
 	// 构造执行语句
 	stmt, prnt, vals, err := buildStatement(exe, para.valctx, src)
 	if err != nil {
@@ -252,8 +330,8 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) error 
 	}()
 
 	logDebug("take stmt, id=%d, lvl=%d line=%s, stmt=%q", head, lvl, line, stmt)
-	if len(exe.Defs) > 0 { // 有结果集提取，不支持OUT
-		var ff = func(row *sql.Rows) error {
+	if len(exe.Refs) > 0 { // 有结果集提取，不支持OUT
+		rowFunc := func(row *sql.Rows) error {
 			cols, er := row.ColumnTypes()
 			if er != nil {
 				return er
@@ -275,7 +353,7 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) error 
 				row.Scan(ptrs...)
 
 				//// 提取结果集
-				for hld, ptn := range exe.Defs {
+				for hld, ptn := range exe.Refs {
 					lost := true
 					if strings.Contains(ptn, "COL[") || strings.Contains(ptn, "VAL[") {
 						// 内置模式
@@ -291,11 +369,11 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) error 
 								} else { // VAL
 									para.valctx[hld] = vals[j]
 									dbt := cols[j].DatabaseTypeName()
-									para.valctx[hld+":DatabaseTypeName"] = dbt
+									para.valctx[hld+magicDatabaseTypeName] = dbt
 									logDebug("simple sys DEF, hold=%s, para=%s, value=%#v, dbtype=%s", hld, ptn, vals[j], dbt)
 								}
 							} else {
-								pld := fmt.Sprintf("%s:%d", hld, k) // 保证多值的不能直接找到
+								pld := fmt.Sprintf("%s:%s:%d", hld, magicA9, k) // 保证多值的不能直接找到
 								if sub[1] == "COL" {
 									cls := make([]string, ln)
 									for i, c := range cols {
@@ -309,10 +387,13 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) error 
 										dbt[i] = c.DatabaseTypeName()
 									}
 									para.valctx[pld] = vals
-									para.valctx[pld+":DatabaseTypeName"] = dbt
+									para.valctx[pld+magicDatabaseTypeName] = dbt
 									logDebug("simple sys DEF, hold=%s, para=%s, value'count=%d", pld, ptn, len(dbt))
 								}
 							}
+						}
+						if len(mts) > 0 { // 确保检查空值成功
+							para.valctx[hld] = magicMultipleValueExt
 						}
 					}
 
@@ -320,7 +401,7 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) error 
 						if strings.EqualFold(cols[i].Name(), ptn) {
 							para.valctx[hld] = vals[i]
 							dbt := cols[i].DatabaseTypeName()
-							para.valctx[hld+":DatabaseTypeName"] = dbt
+							para.valctx[hld+magicDatabaseTypeName] = dbt
 							ltr, _ := src.Literal(vals[i], dbt)
 							logDebug("simple usr DEF, hold=%s, para=%s, value=%s", hld, ptn, ltr)
 							lost = false
@@ -333,25 +414,10 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) error 
 					}
 				}
 
-				// 遍历子树, ONE,FOR,END
-				bsn := false
-				for _, son := range exe.Sons {
-					if !shouldForAct(son, cnt) {
-						continue
-					}
-					logDebug("fork ONE/FOR child=%d, parent=%d, lvl=%d", son.Seg.Head, head, lvl+1)
-					er := runExe(son, src, dst, para, lvl+1)
-					if er != nil {
-						return er
-					}
-					bsn = true
-				}
-
-				if bsn { // 有zi
-					para.cntson++
-					if lvl == 1 {
-						para.cnttop++
-					}
+				// 遍历子树, ONE,FOR
+				er = childFor(exe, src, dst, para, lvl, cnt)
+				if er != nil {
+					return er
 				}
 
 				// 每个记录一棵树
@@ -360,29 +426,22 @@ func runExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) error 
 			}
 
 			// 有记录时，遍历END子树
-			if cnt > 0 {
-				for _, son := range exe.Sons {
-					if !shouldEndAct(son, cnt) {
-						continue
-					}
-					logDebug("fork END child=%d, parent=%d, lvl=%d", son.Seg.Head, head, lvl+1)
-					er := runExe(son, src, dst, para, lvl+1)
-					if er != nil {
-						return er
-					}
-				}
+			er = childEnd(exe, src, dst, para, lvl, cnt)
+			if er != nil {
+				return er
 			}
 
 			LogTrace("loop %d rows, id=%d, lvl=%d, line=%s", cnt, head, lvl, line)
 
 			return nil
 		}
+
 		//
-		er := src.Query(ff, stmt, vals...)
+		er := src.Query(rowFunc, stmt, vals...)
 		if er != nil {
 			return er
 		}
-	} else {
+	} else { // 直接执行的，不会产生子树
 		if lvl == 1 {
 			para.cnttop++
 		}
@@ -559,7 +618,7 @@ func buildStatement(exe *Exe, ctx map[string]interface{}, src *MyConn) (stmt, pr
 		var rtn, std strings.Builder // return,stdout
 		off := 0
 		for _, dep := range exe.Deps {
-			logDebug("parsing dep=%#v", dep)
+			logDebug("parsing dep=%s", dep)
 
 			if dep.Off > off {
 				tmp := stmt[off:dep.Off]
@@ -568,11 +627,11 @@ func buildStatement(exe *Exe, ctx map[string]interface{}, src *MyConn) (stmt, pr
 			}
 
 			off = dep.End
-			hld, ptn := dep.Str, dep.Ptn
+			hld := dep.Str
 
-			if ev, ok := ctx[hld]; ok {
+			if ev, ok := ctx[hld]; ok && ev != magicMultipleValueExt {
 				dbt := ""
-				if dpv, ok := ctx[hld+":DatabaseTypeName"]; ok {
+				if dpv, ok := ctx[hld+magicDatabaseTypeName]; ok {
 					dbt = dpv.(string)
 				}
 
@@ -593,8 +652,13 @@ func buildStatement(exe *Exe, ctx map[string]interface{}, src *MyConn) (stmt, pr
 					std.WriteString(v)
 					logDebug("static simple replace hold=%s, with value=%s", hld, v)
 				}
-			} else {
-				// 多值或模式
+			} else { // 多值或模式
+				ptn := dep.Arg.Para
+				if dep.Arg.Type != CmndStr {
+					err = errorAndLog("unsupported Pattern. hold=%s, para=%s, arg=%d", hld, ptn, dep.Arg.Head)
+					return
+				}
+
 				//espace
 				var sb strings.Builder
 				pln := len(ptn)
@@ -647,7 +711,7 @@ func buildStatement(exe *Exe, ctx map[string]interface{}, src *MyConn) (stmt, pr
 
 					mpos = append(mpos, sub[0], sub[1])
 
-					pld := fmt.Sprintf("%s:%d", hld, k) // 保证多值的不能直接找到
+					pld := fmt.Sprintf("%s:%s:%d", hld, magicA9, k) // 保证多值的不能直接找到
 					hv, ok := ctx[pld]
 					if !ok {
 						err = errorAndLog("failed to get %d hold's value. hold=%s, para=%s", k, hld, ptn)
@@ -675,7 +739,7 @@ func buildStatement(exe *Exe, ctx map[string]interface{}, src *MyConn) (stmt, pr
 						mval = append(mval, hv, EmptyArr)
 						logDebug("get %d COL values. hold=%s, para=%s", k, hld, ptn)
 					} else {
-						dv, dk := ctx[pld+":DatabaseTypeName"]
+						dv, dk := ctx[pld+magicDatabaseTypeName]
 						if !dk {
 							err = errorAndLog("failed to get %d hold's type. hold=%s, para=%s", k, hld, ptn)
 							return
@@ -739,5 +803,49 @@ func buildStatement(exe *Exe, ctx map[string]interface{}, src *MyConn) (stmt, pr
 		prnt = std.String()
 	}
 
+	return
+}
+
+func childFor(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl, cnt int) (err error) {
+	head := exe.Seg.Head
+	// 遍历子树, ONE,FOR
+	bsn := false
+	for _, son := range exe.Sons {
+		if !shouldForAct(son, cnt) {
+			continue
+		}
+		logDebug("fork ONE/FOR child=%d, parent=%d, lvl=%d", son.Seg.Head, head, lvl+1)
+		err = runTreeExe(son, src, dst, para, lvl+1)
+		if err != nil {
+			return
+		}
+		bsn = true
+	}
+
+	if bsn { // 有zi
+		para.cntson++
+		if lvl == 1 {
+			para.cnttop++
+		}
+	}
+
+	return
+}
+
+func childEnd(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl, cnt int) (err error) {
+	if cnt <= 0 {
+		return
+	}
+	head := exe.Seg.Head
+	for _, son := range exe.Sons {
+		if !shouldEndAct(son, cnt) {
+			continue
+		}
+		logDebug("fork END child=%d, parent=%d, lvl=%d", son.Seg.Head, head, lvl+1)
+		err = runTreeExe(son, src, dst, para, lvl+1)
+		if err != nil {
+			return
+		}
+	}
 	return
 }

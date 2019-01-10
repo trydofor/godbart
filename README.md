@@ -13,6 +13,7 @@
 使用场景和前置要求，
 
  * DBA维护多库，一个SQL在多库上执行。
+ * 分表分库后，多表更新和版本管理。
  * 生成某库某表的创建SQL（表&索引，触发器）。
  * 对比多库多表的结构差异（表，列，索引，触发器）。
  * 多库的版本管理，按指定版本更新。
@@ -66,6 +67,8 @@
  * `-x` 选填，SQL文件后缀，不区分大小写。
  * `-t` 选填，通过修改输出级别，调整信息量。
  * `--agree` 选填，风险自负，真正执行。
+ 
+ 在分表上执行，参考`revi`说明。
 
 ### 1.2. 版本管理 Revi
 
@@ -125,7 +128,30 @@ ALTER TABLE `tx_outer_trknum$log`
 REPLACE INTO sys_schema_version (version, created) VALUES( 2018022801, NOW());
 ```
 
-### 1.3. 结构对比 Diff
+### 1.3. 分表版本管理 Revi
+
+当存在分表的情况下，可以按序号建表，或者根据规则更新已存在的表。
+更多关于`指令`可以参考`指令变量`说明，及`tree`应用实例。
+
+```mysql
+-- SEQ tx_test_%02d[1,10] tx_test_##
+CREATE TABLE `tx_test_##` (
+  `id` BIGINT NOT NULL COMMENT 'id',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+
+-- TBL tx_outer_trknum.* `tx_outer_trknum`
+ALTER TABLE `tx_outer_trknum`
+  ADD COLUMN `label_file` VARCHAR(200) DEFAULT NULL COMMENT '面单文件位置' AFTER `trknum`;
+```
+
+上述SQL会完成以下两种操作。
+
+ * 创建 tx_test_01,...,tx_test_20，一共20张表
+ * 更新 tx_outer_trknum 和 tx_outer_trknum$log表
+
+### 1.4. 结构对比 Diff
 
 用来对比结构差异，也能生成创建的SQL(DDL)，支持table&index，trigger。
 
@@ -155,7 +181,7 @@ REPLACE INTO sys_schema_version (version, created) VALUES( 2018022801, NOW());
 参数为需要对比的表的名字的正则表达式。如果参数为空，表示所有表。
 只有一个库时，仅打印该库，多个时才进行比较。
 
-### 1.4. 结构同步 Sync
+### 1.5. 结构同步 Sync
 
 同步多库间的表结构，目前只支持空表创建。此场景一般出现在初始化一个新数据库的时候。
 因为数据库版本管理不会造成很大差异，如果存在差异，且有数据的情况下，人工介入更好。
@@ -184,7 +210,7 @@ REPLACE INTO sys_schema_version (version, created) VALUES( 2018022801, NOW());
 
 参数为需要对比的表的名字的正则表达式。如果参数为空，表示所有表。
 
-### 1.5. 数据迁移 Tree
+### 1.6. 数据迁移 Tree
 
 不建议一次转移大量数据，有概率碰到网络超时或内存紧张。
 
@@ -255,7 +281,7 @@ SELECT * FROM tx_parcel_event WHERE parcel_id = 'tx_parcel.id';
 REPLACE INTO sys_hot_separation VALUES ('tx_parcel', 'tx_parcel.id', now());
 ```
 
-### 1.6. 控制端口
+### 1.7. 控制端口
 
 对于长时间执行的命令，支持单例和运行时控制（如优雅停止），因此增加了`控制端口`功能。
 其监听TCP端口（建议1024以上），当端口号≤0时，表示忽略此功能。
@@ -307,10 +333,16 @@ stop # 优雅停止当前一棵树的结束
 `数据树`按SQL的自然顺序构建和执行，`占位`必须先声明再使用，否则无法正确识别。
 明确语意和增加可读性，`RUN|OUT`存在顺序调整，下文有讲。
 
+`挂树`是指数据数分叉时，寻找父树的动作，当前的规则如下：
+ * `RUN|OUT` 属于显示`挂树`，优先级是`10`，支持多父结构
+ * `REF|STR`，是隐式挂树，只支持单父，取按行号大者，优先级是`20`。
+ * `SEQ|TBL`，同`REF`，优先级时`30`。
+ * 按优先级`挂树`，数值越小优先级越高，当高优先级完成后，忽略低优先级。
+
  * `指令名`是固定值，当前只支持，`ENV|REF|STR|RUN|OUT`
-    - `ENV` `REF` `STR` 为定义（Def）指令。
-    - `RUN` `OUT` 为行为（Act）指令。
-    - `ENV` `REF` 对`变量`自动脱去最外层成对的引号。
+    - `ENV|REF|STR|SEQ|TBL` 等会产生值，为定义（Def）指令。
+    - `RUN|OUT` 为行为（Act）指令。
+    - `ENV|REF` 对`变量`自动脱去最外层成对的引号。
     - `STR` 有自己的脱引号规则，以进行`模式展开`。
  * `引号`包括，单引号`'`，双引号`"`，反单引号`` ` ``。
  * `空白`指英文空格`0x20`和制表符`\t`
@@ -322,6 +354,8 @@ stop # 优雅停止当前一棵树的结束
     - 尽量使用SQL的合规语法，没必要自找麻烦，比如没必要的引号或特殊字符。
     - 使用时，保留所有引号。
     - 选择`占位`，尽量构造出where条件为false的无公害SQL。
+
+注意：所有包含`空白`的`变量`和`占位`，都需要有`引号`配合
 
 ### 2.1. 环境变量 ENV
 
@@ -404,7 +438,7 @@ SELECT * FROM tx_parcel_event WHERE parcel_id = 1234567890;
 ### 2.4. 静态替换 STR
 
 `STR`与`ENV`和`REF`不同，采用的是静态替换字符串。
-它可以直接定义（同`REF`和`ENV`），也以重新电影其他`占位`。
+它可以直接定义（同`REF`和`ENV`），也以重新定义其他动态`占位`使其静态化。
 
 `脱引号`处理，当`变量`和`占位`具有相同的引号规则，会都脱去最外的一层。
 此规则只对`STR`有效，因为其变量部分，可以重定义带有引号的`占位`。
@@ -441,7 +475,46 @@ UPDATE tx_parcel SET logno = -99009 WHERE id='tx_parcel.checked_id';
 -- UPDATE tx_parcel SET `id` = ? ,`create_time` = ? /*循环加下去，逗号分割*/ WHERE id='tx_parcel.checked_id';
 ```
 
-### 2.5. 条件执行 RUN
+### 2.5. 整数序列 SEQ
+
+`SEQ`会生成整数序列，只支持静态替换。
+
+ * `参数` 格式为`格式[开始,结束,步长]`，如`tx_test_%02d[1,20]`
+ * `格式`为`fmt`的`printf`标准格式
+ * `开始`和`结束`都时闭区间，是包含的
+ * `步长`可以省略，默认是`1`
+ * 注意`空白`
+ 
+`SEQ`会其定义处产生循环，但不产生树。对自身及子树有影响。
+
+详见 `demo/sql/tree/stbl.sql`
+ 
+ ```mysql
+ -- SEQ `tx_test_%02d[1,10]` tx_test_## #生成tx_test_01到tx_test_10，共10张表
+ CREATE TABLE `tx_test_##` (
+   `id` BIGINT NOT NULL COMMENT 'id',
+   PRIMARY KEY (`id`)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+```
+
+ 
+### 2.6. 表名匹配 TBL
+
+`TBL`根据当前库现有表进行匹配，只支持静态替换
+
+ * `参数` 为正则，行为上等同于使用了`^$`，会对表名进行全匹配，不是部分。
+ * 也可以使用`\b`或 `^|$`进行界定
+
+规则同`SEQ`，详见 `demo/sql/tree/stbl.sql`。
+当在Out执行时，表名为当前数据库内所有表。
+
+```mysql
+ -- TBL tx_outer_trknum.* `tx_outer_trknum` # 正则匹配表名。
+ ALTER TABLE `tx_outer_trknum`
+   ADD COLUMN `label_file` VARCHAR(200) DEFAULT NULL COMMENT '面单文件位置' AFTER `trknum`;
+```
+
+### 2.7. 条件执行 RUN
 
 执行条件由`REF`或`ENV`定义，只对所在的语句有效，执行顺序与SQL行顺序有关。
 
@@ -467,11 +540,11 @@ UPDATE tx_parcel SET logno = -99009 WHERE id='tx_parcel.checked_id';
 
 条件执行的例子，参考 `demo/sql/tree/*.sql`
 
-### 2.6. 输出执行 OUT
+### 2.8. 输出执行 OUT
 
 与条件执行 `RUN` 一样的定义，但不在源DB上执行，而是在目标DB上执行。
 
-注意，在有`定义Def`语句（`REF`或`STR`直接定义）时，不能使用`OUT`。
+注意，在有`定义Def`语句，如`REF`或`SEQ`等，不能使用`OUT`。
 因为一个`占位`在运行时存在多值，从而导致语义混乱或执行时麻烦。
 
 ```mysql
@@ -819,17 +892,48 @@ ORDER BY
 静态分析，第一步，要执行sqlx命令，分析树结构。第二部，不带agree参数在db上执行以下，看debug日志。
 运行时监控，使用控制端口，telnet连接过去，使用`stat|wait|tree`命令，还有本机日志。
 
-### 4.8. 使用`tree`做版本更新
+### 4.8. `tree`做版本管理（分表）
 
 除了`revi`，使用`tree`的`VAR和RUN FOR`也可以完成版本更新的。
 
 ```mysql
+-- 单表 =========================
 -- VAR VER v2019010302
 SELECT MAX(version) as VER FROM sys_schema_version WHERE version = 2019010302;
 -- RUN NOT v2019010302
 ALTER TABLE tx_parcel ADD CONSTRAINT uk_track_num UNIQUE (is_deleted, track_num);
 -- RUN NOT v2019010302
 REPLACE INTO sys_schema_version (version, created) VALUES(2019010302, NOW());
+
+-- 分表 =========================
+-- VAR VER v2019010302
+SELECT MAX(version) as VER FROM sys_schema_version WHERE version = 2019010302;
+-- RUN NOT v2019010302
+-- STR tbl `tx_parcel_#` 为分表更新
+SELECT tbl FROM (
+  SELECT 'tx_parcel_0' AS tbl  UNION ALL
+  SELECT 'tx_parcel_1' UNION ALL
+  SELECT 'tx_parcel_2' UNION ALL
+  SELECT 'tx_parcel_3') TMP;
+-- RUN NOT v2019010302
+ALTER TABLE `tx_parcel_#` ADD CONSTRAINT uk_track_num UNIQUE (is_deleted, track_num);
+-- RUN NOT v2019010302
+REPLACE INTO sys_schema_version (version, created) VALUES(2019010302, NOW());
+
+-- 分表 =========================== 0.9.7+
+
+-- SEQ tx_parcel_%02d[1,10] tx_parcel_##create
+CREATE TABLE IF NOT EXISTS `tx_parcel_##create` like `tx_parcel`;
+-- RUN FOR tx_parcel_##create
+INSERT IGNORE `tx_parcel_##create` SELECT * FROM `tx_parcel` limit 1;
+-- OUT FOR tx_parcel_##create
+CREATE TABLE IF NOT EXISTS `tx_parcel_##create` like `tx_parcel`;
+
+
+-- TBL tx_parcel_\d+ tx_parcel_##select
+-- REF id 'tx_parcel.id'  #提取 id，作为'tx_parcel.id'节点
+-- STR VAL[] 'tx_parcel.VALS'
+SELECT * FROM `tx_parcel_##select` limit 1;
 ```
 
 ## 5. 不想理你的问题
