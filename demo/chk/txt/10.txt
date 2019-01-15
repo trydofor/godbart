@@ -1,0 +1,7 @@
+
+#DETAIL TABLE=tx_parcel, LEFT(>)=godbart_prd_main, RIGHT(<)=godbart_dev_main
+=Col Only Name | No. | Type | Nullable | Default | Comment | Extra
+>shelf_time    |  15 | datetime | true | <NULL> | 最新上架时间 |
+#DETAIL TABLE=tx_parcel$log, LEFT(>)=godbart_prd_main, RIGHT(<)=godbart_dev_main
+=Col Only Name | No. | Type | Nullable | Default | Comment | Extra
+>shelf_time    |  15 | datetime | true | <NULL> | 最新上架时间 |

@@ -1,0 +1,693 @@
+-- -- SRC ID=2, LINE=2:2
+SELECT table_name, checked_id FROM sys_hot_separation;
+
+-- -- SRC ID=8, LINE=8:8
+SELECT version FROM sys_schema_version;
+
+-- -- OUT ID=11, LINE=11:11, FOR
+-- version=2018112001;
+
+-- -- SRC ID=14, LINE=14:14
+SELECT * FROM tx_parcel;
+
+-- -- OUT ID=17, LINE=17:17, FOR
+-- id=93152
+-- create_time='2016-08-11 21:17:43'
+-- modify_time='2017-11-01 10:17:50'
+-- is_deleted=0
+-- logno=226608
+-- user_id=1
+-- warehouse=NULL
+-- sender_id=49799
+-- recver_id=80385
+-- track_num='SU160816'
+-- weight_pkg=2.75
+-- weight_dim=NULL
+-- input_time=NULL
+-- store_time=NULL
+-- shelf_time=NULL
+-- leave_time='2016-08-12 22:12:10'
+-- track_time='2016-08-20 10:32:18';
+
+-- -- OUT ID=17, LINE=17:17, FOR
+-- id=93163
+-- create_time='2016-08-11 22:49:34'
+-- modify_time='2017-11-01 10:17:50'
+-- is_deleted=0
+-- logno=226608
+-- user_id=1
+-- warehouse=NULL
+-- sender_id=14245
+-- recver_id=80649
+-- track_num='100354269562'
+-- weight_pkg=3.00
+-- weight_dim=NULL
+-- input_time='2016-08-12 06:32:13'
+-- store_time='2016-08-12 15:01:30'
+-- shelf_time=NULL
+-- leave_time='2016-08-12 22:12:07'
+-- track_time='2016-08-20 10:23:57';
+
+-- -- OUT ID=17, LINE=17:17, FOR
+-- id=278580
+-- create_time='2017-01-02 16:59:08'
+-- modify_time='2017-11-01 10:17:50'
+-- is_deleted=0
+-- logno=2481043
+-- user_id=78
+-- warehouse=NULL
+-- sender_id=93201
+-- recver_id=311828
+-- track_num='303354496818'
+-- weight_pkg=4.10
+-- weight_dim=NULL
+-- input_time=NULL
+-- store_time='2017-01-04 16:58:03'
+-- shelf_time=NULL
+-- leave_time='2017-01-04 20:15:56'
+-- track_time='2017-01-19 02:42:13';
+
+-- -- OUT ID=17, LINE=17:17, FOR
+-- id=278581
+-- create_time='2017-01-02 17:00:51'
+-- modify_time='2017-11-01 10:17:50'
+-- is_deleted=0
+-- logno=2481043
+-- user_id=78
+-- warehouse=NULL
+-- sender_id=93201
+-- recver_id=311829
+-- track_num='303762397428'
+-- weight_pkg=4.10
+-- weight_dim=NULL
+-- input_time=NULL
+-- store_time='2017-01-04 16:57:03'
+-- shelf_time=NULL
+-- leave_time='2017-01-06 17:33:45'
+-- track_time='2017-01-19 02:42:13';
+
+-- -- OUT ID=17, LINE=17:17, FOR
+-- id=1163922
+-- create_time='2018-01-02 17:39:50'
+-- modify_time='2018-01-17 06:49:00'
+-- is_deleted=0
+-- logno=3600736
+-- user_id=96
+-- warehouse=2
+-- sender_id=467122
+-- recver_id=761994
+-- track_num='NY180100000201'
+-- weight_pkg=0.30
+-- weight_dim=NULL
+-- input_time=NULL
+-- store_time='2018-01-03 09:41:27'
+-- shelf_time=NULL
+-- leave_time='2018-01-03 11:37:48'
+-- track_time=NULL;
+
+-- -- OUT ID=17, LINE=17:17, FOR
+-- id=1163923
+-- create_time='2018-01-02 17:39:51'
+-- modify_time='2018-01-17 06:49:00'
+-- is_deleted=0
+-- logno=3600736
+-- user_id=96
+-- warehouse=2
+-- sender_id=467123
+-- recver_id=761995
+-- track_num='NY180100000901'
+-- weight_pkg=1.10
+-- weight_dim=NULL
+-- input_time=NULL
+-- store_time='2018-01-03 09:42:11'
+-- shelf_time=NULL
+-- leave_time='2018-01-03 11:37:48'
+-- track_time=NULL;
+
+-- -- SRC ID=20, LINE=20:20
+SELECT * FROM tx_parcel_event;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=350213
+-- create_time='2016-08-12 15:01:30'
+-- modify_time='2016-08-12 15:01:30'
+-- is_deleted=0
+-- logno=210992
+-- user_id=1
+-- parcel_id=93163
+-- type=100
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=350946
+-- create_time='2016-08-12 22:12:07'
+-- modify_time='2016-08-12 22:12:07'
+-- is_deleted=0
+-- logno=212067
+-- user_id=1
+-- parcel_id=93163
+-- type=300
+-- source='airwayBill=999-45480293'
+-- operator_id=57
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=351370
+-- create_time='2016-08-12 22:12:07'
+-- modify_time='2016-08-12 22:12:07'
+-- is_deleted=0
+-- logno=212067
+-- user_id=1
+-- parcel_id=93152
+-- type=300
+-- source='airwayBill=999-45480293'
+-- operator_id=57
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=363385
+-- create_time='2016-08-20 10:23:57'
+-- modify_time='2016-08-20 10:23:57'
+-- is_deleted=0
+-- logno=222515
+-- user_id=1
+-- parcel_id=93163
+-- type=500
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=363390
+-- create_time='2016-08-20 10:32:18'
+-- modify_time='2016-08-20 10:32:18'
+-- is_deleted=0
+-- logno=222515
+-- user_id=1
+-- parcel_id=93152
+-- type=500
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=370091
+-- create_time='2016-08-22 13:00:32'
+-- modify_time='2016-08-22 13:00:32'
+-- is_deleted=0
+-- logno=226608
+-- user_id=1
+-- parcel_id=93163
+-- type=501
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=370092
+-- create_time='2016-08-22 13:10:05'
+-- modify_time='2016-08-22 13:10:05'
+-- is_deleted=0
+-- logno=226608
+-- user_id=1
+-- parcel_id=93152
+-- type=501
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=833144
+-- create_time='2017-01-04 16:57:03'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=663020
+-- user_id=78
+-- parcel_id=278581
+-- type=100
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=833154
+-- create_time='2017-01-04 16:58:03'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=663030
+-- user_id=78
+-- parcel_id=278580
+-- type=100
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=883598
+-- create_time='2017-01-11 23:59:37'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=710728
+-- user_id=78
+-- parcel_id=278580
+-- type=300
+-- source='airwayBill=784-29622666'
+-- operator_id=56
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=883616
+-- create_time='2017-01-11 23:59:37'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=710728
+-- user_id=78
+-- parcel_id=278581
+-- type=300
+-- source='airwayBill=784-29622666'
+-- operator_id=56
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=933048
+-- create_time='2017-01-19 02:42:13'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=756412
+-- user_id=78
+-- parcel_id=278580
+-- type=500
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=933492
+-- create_time='2017-01-19 08:48:11'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=752392
+-- user_id=78
+-- parcel_id=278581
+-- type=500
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=933614
+-- create_time='2017-01-19 02:42:13'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=756412
+-- user_id=78
+-- parcel_id=278581
+-- type=500
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=1048772
+-- create_time='2017-01-30 22:05:59'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=782423
+-- user_id=78
+-- parcel_id=278580
+-- type=502
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=1049551
+-- create_time='2017-01-31 00:00:22'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=782423
+-- user_id=78
+-- parcel_id=278581
+-- type=502
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=3012022
+-- create_time='2018-01-02 17:39:51'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=3517088
+-- user_id=NULL
+-- parcel_id=1163922
+-- type=7
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=3012023
+-- create_time='2018-01-02 17:39:52'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=3517089
+-- user_id=NULL
+-- parcel_id=1163923
+-- type=7
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=3029856
+-- create_time='2018-01-03 00:58:31'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=3529662
+-- user_id=96
+-- parcel_id=1163922
+-- type=100
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=3029979
+-- create_time='2018-01-03 01:07:44'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=3529885
+-- user_id=96
+-- parcel_id=1163923
+-- type=100
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=3033050
+-- create_time='2018-01-03 09:41:27'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=3532704
+-- user_id=NULL
+-- parcel_id=1163922
+-- type=100
+-- source='125.119.237.185'
+-- operator_id=87
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=3033333
+-- create_time='2018-01-03 09:42:11'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=3532954
+-- user_id=NULL
+-- parcel_id=1163923
+-- type=100
+-- source='125.119.237.185'
+-- operator_id=87
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=3036336
+-- create_time='2018-01-03 11:54:01'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=3534378
+-- user_id=NULL
+-- parcel_id=1163922
+-- type=190
+-- source='125.119.237.185'
+-- operator_id=87
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=3036337
+-- create_time='2018-01-03 11:54:04'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=3534378
+-- user_id=NULL
+-- parcel_id=1163923
+-- type=190
+-- source='125.119.237.185'
+-- operator_id=87
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=3038150
+-- create_time='2018-01-03 23:20:40'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=3534716
+-- user_id=NULL
+-- parcel_id=1163922
+-- type=300
+-- source='72.227.141.116'
+-- operator_id=57
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=3038151
+-- create_time='2018-01-03 23:20:40'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=3534716
+-- user_id=NULL
+-- parcel_id=1163923
+-- type=300
+-- source='72.227.141.116'
+-- operator_id=57
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=3106745
+-- create_time='2018-01-17 06:50:48'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=3600736
+-- user_id=NULL
+-- parcel_id=1163922
+-- type=501
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=3106746
+-- create_time='2018-01-17 06:50:50'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=3600736
+-- user_id=NULL
+-- parcel_id=1163923
+-- type=501
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- SRC ID=26, LINE=26:26
+SELECT * FROM tx_parcel$log;
+
+-- -- SRC ID=32, LINE=32:32
+SELECT * FROM tx_receiver;
+
+-- -- OUT ID=35, LINE=35:35, FOR
+-- id=80385
+-- create_time='2016-08-11 21:17:43'
+-- modify_time='2017-12-08 07:10:14'
+-- is_deleted=0
+-- logno=-2500
+-- user_id=1
+-- name='张三'
+-- phone='13000000001'
+-- postcode='310000'
+-- country=2
+-- province='ZJ'
+-- city='杭州市'
+-- district=NULL
+-- address1='上城区江城路候潮公寓'
+-- address2=NULL
+-- hash='';
+
+-- -- OUT ID=35, LINE=35:35, FOR
+-- id=80649
+-- create_time='2016-08-12 06:32:13'
+-- modify_time='2017-12-08 07:10:14'
+-- is_deleted=0
+-- logno=-2500
+-- user_id=1
+-- name='张山'
+-- phone='13000000002'
+-- postcode='311500'
+-- country=2
+-- province='ZJ'
+-- city='杭州市'
+-- district=NULL
+-- address1='桐庐县分水镇东门雅苑'
+-- address2=''
+-- hash='';
+
+-- -- OUT ID=35, LINE=35:35, FOR
+-- id=311828
+-- create_time='2017-01-02 16:59:08'
+-- modify_time='2017-12-08 07:10:14'
+-- is_deleted=0
+-- logno=-2500
+-- user_id=78
+-- name='李四'
+-- phone='13000000003'
+-- postcode='200000'
+-- country=2
+-- province='SH'
+-- city='上海'
+-- district='徐汇区'
+-- address1='华泾路1425弄'
+-- address2=''
+-- hash='';
+
+-- -- OUT ID=35, LINE=35:35, FOR
+-- id=311829
+-- create_time='2017-01-02 17:00:51'
+-- modify_time='2017-12-08 07:10:14'
+-- is_deleted=0
+-- logno=-2500
+-- user_id=78
+-- name='李思'
+-- phone='13000000004'
+-- postcode='200000'
+-- country=2
+-- province='SH'
+-- city='上海'
+-- district='徐汇区'
+-- address1='华泾路1427弄1'
+-- address2=''
+-- hash='';
+
+-- -- OUT ID=35, LINE=35:35, FOR
+-- id=761994
+-- create_time='2018-01-02 17:39:50'
+-- modify_time='2018-01-02 17:41:04'
+-- is_deleted=0
+-- logno=3528135
+-- user_id=NULL
+-- name='王五'
+-- phone='18000000005'
+-- postcode='301700'
+-- country=2
+-- province='TJ'
+-- city='天津'
+-- district='武清区'
+-- address1='杨村街和平里小区'
+-- address2=''
+-- hash='ca9a4340416208d05df21319095c332d';
+
+-- -- OUT ID=35, LINE=35:35, FOR
+-- id=761995
+-- create_time='2018-01-02 17:39:52'
+-- modify_time='2018-01-02 17:41:03'
+-- is_deleted=0
+-- logno=3530808
+-- user_id=NULL
+-- name='王武'
+-- phone='18000000006'
+-- postcode='110100'
+-- country=2
+-- province='LN'
+-- city='沈阳市'
+-- district='浑南区'
+-- address1='辽宁省沈阳市浑南区金阳街'
+-- address2=''
+-- hash='b8516c744f0bfeebde027233bf29b546';
+
+-- -- SRC ID=38, LINE=38:38
+SELECT * FROM tx_track;
+
+-- -- OUT ID=41, LINE=41:41, FOR
+-- id=172204
+-- create_time='2016-08-11 21:17:43'
+-- modify_time='2016-12-09 16:28:24'
+-- is_deleted=0
+-- logno=222515
+-- user_id=1
+-- parcel_id=93152
+-- company=200
+-- track_num='SU160816'
+-- events='[{\"date\":\"2016-08-11 10:31:53\",\"info\":\"【纽约】美东仓库已揽件\",\"status\":100},{\"date\":\"2016-08-12 22:12:10\",\"info\":\"【纽约】包裹已从中转仓离开\",\"status\":200},{\"date\":\"2016-08-13 17:52:19\",\"info\":\"【纽约】干线航班已从【纽约肯尼迪国际机场】起飞，航班号：CA982\",\"status\":300},{\"date\":\"2016-08-17 08:46:33\",\"info\":\"【哈尔滨】干线航班已到达【哈尔滨太平国际机场】\",\"status\":300},{\"date\":\"2016-08-18 09:18:31\",\"info\":\"【哈尔滨】包裹清关中\",\"status\":400},{\"date\":\"2016-08-20 10:35:55\",\"info\":\"清关完成，正在国内配送\",\"status\":500}]'
+-- status=500
+-- dest_city=NULL;
+
+-- -- OUT ID=41, LINE=41:41, FOR
+-- id=172215
+-- create_time='2016-08-11 22:49:34'
+-- modify_time='2016-12-09 16:28:24'
+-- is_deleted=0
+-- logno=222515
+-- user_id=1
+-- parcel_id=93163
+-- company=200
+-- track_num='100354269562'
+-- events='[{\"date\":\"2016-08-11 22:49:34\",\"info\":\"【纽约】美东仓库已揽件\",\"status\":100},{\"date\":\"2016-08-12 22:12:07\",\"info\":\"【纽约】包裹已从中转仓离开\",\"status\":200}]'
+-- status=200
+-- dest_city=NULL;
+
+-- -- OUT ID=41, LINE=41:41, FOR
+-- id=369644
+-- create_time='2017-01-04 16:57:03'
+-- modify_time='2017-03-03 02:37:12'
+-- is_deleted=0
+-- logno=1024502
+-- user_id=78
+-- parcel_id=278581
+-- company=200
+-- track_num='303762397428'
+-- events='[{\"date\":\"2017-01-04 16:57:03\",\"info\":\"【纽约】美东仓库已揽件\",\"status\":100},{\"date\":\"2017-01-13 09:37:21\",\"info\":\"【纽约】包裹已从纽约肯尼迪国际机场发出\",\"status\":200},{\"date\":\"2017-01-13 13:37:42\",\"info\":\"【纽约】干线航班已从【纽约肯尼迪国际机场】起飞，航班号：CZ600\",\"status\":300},{\"date\":\"2017-01-14 09:03:0\",\"info\":\"【广州】干线航班已到达【广州白云国际机场】\",\"status\":300},{\"date\":\"2017-01-15 12:42:11\",\"info\":\"【广州】干线航班已从【广州白云国际机场】起飞，航班号：CA3615\",\"status\":300},{\"date\":\"2017-01-15 13:37:42\",\"info\":\"【哈尔滨】干线航班已到达【哈尔滨太平国际机场】\",\"status\":300},{\"date\":\"2017-01-15 13:40:35\",\"info\":\"【哈尔滨】包裹清关中\",\"status\":400},{\"date\":\"2017-01-18 00:18:20\",\"info\":\"清关完成，正在国内配送\",\"status\":500}]'
+-- status=500
+-- dest_city=NULL;
+
+-- -- OUT ID=41, LINE=41:41, FOR
+-- id=369647
+-- create_time='2017-01-04 16:58:03'
+-- modify_time='2017-03-03 02:36:59'
+-- is_deleted=0
+-- logno=1025160
+-- user_id=78
+-- parcel_id=278580
+-- company=200
+-- track_num='303354496818'
+-- events='[{\"date\":\"2017-01-04 16:58:03\",\"info\":\"【纽约】美东仓库已揽件\",\"status\":100},{\"date\":\"2017-01-13 09:37:21\",\"info\":\"【纽约】包裹已从纽约肯尼迪国际机场发出\",\"status\":200},{\"date\":\"2017-01-13 13:37:42\",\"info\":\"【纽约】干线航班已从【纽约肯尼迪国际机场】起飞，航班号：CZ600\",\"status\":300}]'
+-- status=300
+-- dest_city=NULL;
+
+-- -- OUT ID=41, LINE=41:41, FOR
+-- id=988322
+-- create_time='2018-01-02 17:39:50'
+-- modify_time='2018-01-17 06:49:00'
+-- is_deleted=0
+-- logno=3600736
+-- user_id=NULL
+-- parcel_id=1163922
+-- company=200
+-- track_num='NY180100000201'
+-- events='[{\"date\":\"2018-01-02 17:39:51\",\"info\":\"运单已创建\",\"status\":0,\"template\":\"TX000\"},{\"date\":\"2018-01-03 04:41:27\",\"info\":\"【纽约】包裹已在纽约分拣中心入库\",\"status\":100,\"template\":\"TX100\"},{\"date\":\"2018-01-03 06:37:48\",\"info\":\"【纽约】包裹已从纽约分拣中心离开\",\"status\":200,\"template\":\"TX200\"}]'
+-- status=200
+-- dest_city=NULL;
+
+-- -- OUT ID=41, LINE=41:41, FOR
+-- id=988323
+-- create_time='2018-01-02 17:39:51'
+-- modify_time='2018-01-17 06:49:00'
+-- is_deleted=0
+-- logno=3600736
+-- user_id=NULL
+-- parcel_id=1163923
+-- company=200
+-- track_num='NY180100000901'
+-- events='[{\"date\":\"2018-01-02 17:39:52\",\"info\":\"运单已创建\",\"status\":0,\"template\":\"TX000\"},{\"date\":\"2018-01-03 04:42:11\",\"info\":\"【纽约】包裹已在纽约分拣中心入库\",\"status\":100,\"template\":\"TX100\"},{\"date\":\"2018-01-03 06:37:48\",\"info\":\"【纽约】包裹已从纽约分拣中心离开\",\"status\":200,\"template\":\"TX200\"},{\"date\":\"2018-01-04 08:00:33\",\"id\":1627,\"info\":\"【纽约】包裹已在【纽约肯尼迪国际机场】等待安排航空\",\"status\":300,\"template\":\"TX250\"}]'
+-- status=300
+-- dest_city=NULL;

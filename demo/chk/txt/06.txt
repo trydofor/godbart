@@ -1,0 +1,19 @@
+==== tree=demo/sql/tree/tree.sql ====
+
+id=9
+  |--id=12
+  |--id=17
+  |    |--id=20
+  |    |--id=23
+  |    |--id=54
+  |--id=28
+  |    |--id=31
+  |    |--id=35
+  |    |--id=51
+  |--id=41
+  |    |--id=44
+  |    |--id=47
+  |--id=57
+  |--id=60
+  |--id=63
+==== debug to see more ====

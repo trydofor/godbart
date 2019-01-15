@@ -10,7 +10,7 @@ import (
 
 type ReviSeg struct {
 	revi string
-	segs []Sql
+	exes []*Exe
 }
 
 func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi, mask, rqry string, risk bool) error {
@@ -31,6 +31,7 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi, mask, r
 	rlen := len(rqry)
 
 	// 倒序分版本块
+	envs := make(map[string]string)
 	for k := len(file) - 1; k >= 0; k-- {
 		f := file[k]
 		LogTrace("revi file=%s", f.Path)
@@ -38,23 +39,24 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi, mask, r
 
 		// 按版本分段
 		numRevi, idxRevi := "", len(sqls)-1
-		var reviSplit = func(i int) {
+		reviSplit := func(i int) {
 			v := sqls[i]
 			// find and check SELECT REVI
 			for j := i; j < idxRevi; j++ {
 
 				if w := sqls[j]; w.Exeb {
 
-					if len(w.Text) < rlen || !strings.EqualFold(rqry, w.Text[0:rlen]) {
+					stm := w.Text
+					if len(stm) < rlen || !strings.EqualFold(rqry, stm[0:rlen]) {
 						continue
 					}
 
 					if len(reviSlt) == 0 {
-						reviSlt = w.Text
-						LogTrace("find SLT-REVI-SQL, file=%s, line=%s, sql=%s", w.File, w.Line, w.Text)
+						reviSlt = stm
+						LogTrace("find SLT-REVI-SQL, file=%s, line=%s, sql=%s", w.File, w.Line, stm)
 					} else {
-						if reviSlt != w.Text {
-							err = errorAndLog("SLT-REVI-SQL changed, file=%s, line=%s, sql=%s", w.File, w.Line, w.Text)
+						if reviSlt != stm {
+							err = errorAndLog("SLT-REVI-SQL changed, file=%s, line=%s, sql=%s", w.File, w.Line, stm)
 							return
 						}
 					}
@@ -65,7 +67,11 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi, mask, r
 			if strings.Compare(numRevi, revi) > 0 {
 				LogTrace("IGNORE bigger revi=%s, file=%s, line=%s", numRevi, v.File, v.Line)
 			} else {
-				reviSegs = append(reviSegs, ReviSeg{numRevi, sqls[i+1 : idxRevi+1]})
+				exe, err := ParseSqlx(sqls[i+1:idxRevi+1], envs)
+				if err != nil {
+					return
+				}
+				reviSegs = append(reviSegs, ReviSeg{numRevi, exe.Exes})
 				LogTrace("ADD candidate revi=%s, file=%s, line=%s", numRevi, v.File, v.Line)
 			}
 		}
@@ -73,15 +79,16 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi, mask, r
 		for i := idxRevi; i >= 0; i-- {
 			v := sqls[i]
 			if v.Exeb {
-				r := findUpdRevi(v.Text, reviUdp, mreg)
+				stm := v.Text
+				r := findUpdRevi(stm, reviUdp, mreg)
 
 				if len(reviUdp) == 0 { // first
 					if len(r) == 0 {
-						return errorAndLog("REVI not matches in the last sql. file=%s, line=%s, sql=%s", v.File, v.Line, v.Text)
+						return errorAndLog("REVI not matches in the last sql. file=%s, line=%s, sql=%s", v.File, v.Line, stm)
 					}
-					LogTrace("find UPD-REVI-SQL, revi=%s, file=%s, line=%s, sql=%s", r, v.File, v.Line, v.Text)
-					p := strings.Index(v.Text, r)
-					reviUdp = strings.ToLower(removeWhite(v.Text[0:p]))
+					LogTrace("find UPD-REVI-SQL, revi=%s, file=%s, line=%s, sql=%s", r, v.File, v.Line, stm)
+					p := strings.Index(stm, r)
+					reviUdp = strings.ToLower(removeWhite(stm[0:p]))
 				}
 
 				if len(r) > 0 {
@@ -91,7 +98,7 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi, mask, r
 						reviCurr = r
 					} else {
 						if strings.Compare(reviCurr, r) <= 0 {
-							return errorAndLog("need uniq&asc revi, but %s <= %s. file=%s, line=%s, sql=%s", reviCurr, r, v.File, v.Line, v.Text)
+							return errorAndLog("need uniq&asc revi, but %s <= %s. file=%s, line=%s, sql=%s", reviCurr, r, v.File, v.Line, stm)
 						}
 					}
 
@@ -174,9 +181,10 @@ func findUpdRevi(updSeg string, updRevi string, mask *regexp.Regexp) (revi strin
 	return mask.FindString(updSeg)
 }
 
-func ReviEach(pref *Preference, revs []ReviSeg, conn Conn, slt string, mask *regexp.Regexp, risk bool) {
+func ReviEach(pref *Preference, revs []ReviSeg, conn *MyConn, slt string, mask *regexp.Regexp, risk bool) {
 
 	var revi string
+	dbn := conn.DbName()
 	var slv = func(rs *sql.Rows) (err error) {
 		var cols []string
 		cols, err = rs.Columns()
@@ -191,10 +199,10 @@ func ReviEach(pref *Preference, revs []ReviSeg, conn Conn, slt string, mask *reg
 		if r1.Valid {
 			revi = r1.String
 			if !mask.MatchString(revi) {
-				return errorAndLog(fmt.Sprintf("revi not matched. revi=%s on db=%s use sql=%s", revi, conn.DbName(), slt))
+				return errorAndLog(fmt.Sprintf("revi not matched. revi=%s on db=%s use sql=%s", revi, dbn, slt))
 			}
 		} else {
-			LogTrace("get NULL revi on db=%s use sql=%s", conn.DbName(), slt)
+			LogTrace("get NULL revi on db=%s use sql=%s", dbn, slt)
 		}
 
 		return
@@ -203,74 +211,74 @@ func ReviEach(pref *Preference, revs []ReviSeg, conn Conn, slt string, mask *reg
 	err := conn.Query(slv, slt)
 	if err != nil {
 		if strings.Contains(err.Error(), "exist") {
-			LogTrace("Table not exist, db=%s use sql=%s", conn.DbName(), slt)
+			LogTrace("Table not exist, db=%s use sql=%s", dbn, slt)
 		} else {
-			LogError("failed to select revision on db=%s use sql=%s, err=%v", conn.DbName(), slt, err)
+			LogError("failed to select revision on db=%s use sql=%s, err=%v", dbn, slt, err)
 			return
 		}
 	}
 
 	if len(revi) == 0 {
-		LogTrace("empty revi means always run. db=%s use sql=%s", conn.DbName(), slt)
+		LogTrace("empty revi means always run. db=%s use sql=%s", dbn, slt)
 	} else {
-		LogTrace("get revi=%s on db=%s use sql=%s", revi, conn.DbName(), slt)
+		LogTrace("get revi=%s on db=%s use sql=%s", revi, dbn, slt)
 	}
 
 	// run
-	cur, cnt := 0, 0
+	sts := make(map[string]bool)
+	ctx := make(map[string]interface{})
 	for _, s := range revs {
-		for _, v := range s.segs {
-			if v.Exeb {
-				cnt++
-			}
-		}
+		walkExes(s.exes, func(exe *Exe) error {
+			sts[fmt.Sprintf("%s:%d", exe.Seg.File, exe.Seg.Head)] = true
+			return nil
+		})
 	}
+	cnt := len(sts)
+	lft := cnt
 
 	cmn, dlt := pref.LineComment, pref.DelimiterRaw
 	for _, s := range revs {
 
 		pcnt := 0
-		for _, v := range s.segs {
-			if v.Exeb {
-				pcnt++
-			}
-		}
+		walkExes(s.exes, func(exe *Exe) error {
+			pcnt++
+			return nil
+		})
 
 		if len(revi) > 0 && strings.Compare(s.revi, revi) <= 0 {
-			LogTrace("ignore smaller. db=%s, revi=%s, db-revi=%s, sqls=[%d,%d]/%d", conn.DbName(), s.revi, revi, cur+1, cur+pcnt, cnt)
-			cur = cur + pcnt
+			lft = lft - pcnt
+			LogTrace("ignore smaller. db=%s, revi=%s, db-revi=%s, sqls=[%d,%d]/%d", dbn, s.revi, revi, lft, lft+pcnt, cnt)
 			continue
 		}
 
-		LogTrace("db=%s, revi=%s, sqls=%d", conn.DbName(), s.revi, pcnt)
-		for _, v := range s.segs {
-			if !v.Exeb {
-				continue
-			}
-
-			cur++
-			if !risk {
+		LogTrace("db=%s, revi=%s, sqls=%d", dbn, s.revi, pcnt)
+		pureRunExes(s.exes, ctx, conn, func(exe *Exe, stm string) error {
+			v := exe.Seg
+			delete(sts, fmt.Sprintf("%s:%d", v.File, v.Head))
+			lft = len(sts)
+			if risk {
+				a, err := conn.Exec(stm)
+				if err != nil {
+					LogError("db=%s, %d/%d, failed to revi sql, revi=%s, file=%s, line=%s, err=%v", dbn, cnt-lft, cnt, s.revi, v.File, v.Line, err)
+					return err
+				} else {
+					LogTrace("db=%s, %d/%d, %d affects. revi=%s, file=%s, line=%s", dbn, cnt-lft, cnt, a, s.revi, v.File, v.Line)
+				}
+			} else {
 				// 不处理 trigger 新结束符问题。
-				if strings.Contains(v.Text, dlt) {
+				if strings.Contains(stm, dlt) {
 					OutTrace("%s find '%s', May Need '%s' to avoid", cmn, dlt, pref.DelimiterCmd)
 				}
-				OutTrace("%s db=%s, %d/%d, revi=%s, file=%s ,line=%s\n%s%s", cmn, conn.DbName(), cur, cnt, s.revi, v.File, v.Line, v.Text, dlt)
-				continue
+				OutTrace("%s db=%s, %d/%d, revi=%s, file=%s ,line=%s\n%s%s", cmn, dbn, cnt-lft, cnt, s.revi, v.File, v.Line, stm, dlt)
 			}
+			return nil
+		})
 
-			a, err := conn.Exec(v.Text)
-			if err != nil {
-				LogError("db=%s, %d/%d, failed to revi sql, revi=%s, file=%s, line=%s, err=%v", conn.DbName(), cur, cnt, s.revi, v.File, v.Line, err)
-				break
-			} else {
-				LogTrace("db=%s, %d/%d, %d affects. revi=%s, file=%s, line=%s", conn.DbName(), cur, cnt, a, s.revi, v.File, v.Line)
-			}
-		}
 	}
 
-	if cur != cnt {
-		LogTrace("db=%s, %d/%d, partly done", conn.DbName(), cur, cnt)
+	if lft == 0 {
+		LogTrace("db=%s, exes=%d, all done", dbn, cnt)
 	} else {
-		LogTrace("db=%s, sqls=%d, all done", conn.DbName(), cnt)
+		LogTrace("db=%s, %d/%d", dbn, cnt-lft, cnt)
 	}
 }

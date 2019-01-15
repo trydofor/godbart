@@ -13,9 +13,7 @@ type Sql struct {
 	Text string // 正文部分
 }
 
-type Sqls []Sql
-
-func ParseSqls(pref *Preference, file *FileEntity) Sqls {
+func ParseSqls(pref *Preference, file *FileEntity) []Sql {
 	LogTrace("parse Sqls, file=%s", file.Path)
 
 	lines := splitLinex(file.Text)
@@ -95,7 +93,7 @@ func parseComment(segs *[]Sql, lines []string, name string, b *int, e int) {
 	*segs = append(*segs, Sql{
 		line, head, false, name, text,
 	})
-	logDebug("%3d, parsed Comment, line=%s", len(*segs), line)
+	LogDebug("%3d, parsed Comment, line=%s", len(*segs), line)
 	*b = -1
 }
 
@@ -125,7 +123,7 @@ func parseStatement(segs *[]Sql, lines []string, name string, b *int, e int, dt 
 						name,
 						strings.Join(lines[lns:i], Joiner),
 					})
-					logDebug("%3d, parsed Statement, line=%s", len(*segs), line)
+					LogDebug("%3d, parsed Statement, line=%s", len(*segs), line)
 				}
 				lns = n
 				// fmt.Printf("\t\tget new delimitor [%s] at line %d\n", *dt, n)
@@ -145,7 +143,7 @@ func parseStatement(segs *[]Sql, lines []string, name string, b *int, e int, dt 
 				name,
 				strings.Join(lines[lns:n], Joiner),
 			})
-			logDebug("%3d, parsed Statement, line=%s", len(*segs), line)
+			LogDebug("%3d, parsed Statement, line=%s", len(*segs), line)
 			lns = n
 			// fmt.Printf("\t\tget the delimitor at line %d\n", n)
 		}
@@ -161,7 +159,7 @@ func parseStatement(segs *[]Sql, lines []string, name string, b *int, e int, dt 
 			name,
 			strings.Join(lines[lns:lne], Joiner),
 		})
-		logDebug("%3d, parsed Statement, line=%s", len(*segs), line)
+		LogDebug("%3d, parsed Statement, line=%s", len(*segs), line)
 	}
 
 	*b = -1

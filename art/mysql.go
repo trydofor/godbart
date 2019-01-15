@@ -63,34 +63,33 @@ func (m *MyConn) Exec(qr string, args ...interface{}) (int64, error) {
 }
 
 func (m *MyConn) Query(fn func(*sql.Rows) error, qr string, args ...interface{}) error {
-	if rs, err := m.Conn.Query(qr, args...); err != nil {
-		return err
+	if rs, er := m.Conn.Query(qr, args...); er != nil {
+		return er
 	} else {
 		defer rs.Close()
 		return fn(rs)
 	}
 }
 
-func (m *MyConn) Tables() ([]string, error) {
-	var tbls []string
-	var sn = func(rs *sql.Rows) (er error) {
+func (m *MyConn) Tables() (tbs []string, err error) {
+	fn := func(rs *sql.Rows) (er error) {
 		for rs.Next() {
 			var val string
 			if er = rs.Scan(&val); er != nil {
 				return
 			}
-			tbls = append(tbls, val)
+			tbs = append(tbs, val)
 		}
 		return
 	}
 
-	err := m.Query(sn, `SHOW TABLES`)
-	return tbls, err
+	err = m.Query(fn, `SHOW TABLES`)
+	return
 }
 
 func (m *MyConn) Columns(table string) (map[string]Col, error) {
 	cls := make(map[string]Col)
-	var sn = func(rs *sql.Rows) (er error) {
+	fn := func(rs *sql.Rows) (er error) {
 		for rs.Next() {
 			cl, nl := Col{}, ""
 			if er = rs.Scan(&cl.Name, &cl.Seq, &cl.Deft, &nl, &cl.Type, &cl.Key, &cl.Cmnt, &cl.Extr); er != nil {
@@ -102,7 +101,7 @@ func (m *MyConn) Columns(table string) (map[string]Col, error) {
 		return
 	}
 
-	err := m.Query(sn, `
+	err := m.Query(fn, `
 SELECT 
     COLUMN_NAME,
     ORDINAL_POSITION,
@@ -123,7 +122,7 @@ WHERE
 
 func (m *MyConn) Indexes(table string) (map[string]Idx, error) {
 	ixs := make(map[string]Idx)
-	var sn = func(rs *sql.Rows) (er error) {
+	fn := func(rs *sql.Rows) (er error) {
 		for rs.Next() {
 			ix, nq := Idx{}, 0
 			if er = rs.Scan(&ix.Name, &nq, &ix.Cols, &ix.Type); er != nil {
@@ -135,7 +134,7 @@ func (m *MyConn) Indexes(table string) (map[string]Idx, error) {
 		return
 	}
 
-	err := m.Query(sn, `
+	err := m.Query(fn, `
 SELECT 
     INDEX_NAME,
     GROUP_CONCAT(DISTINCT NON_UNIQUE) AS UNIQ,
@@ -153,7 +152,7 @@ WHERE
 
 func (m *MyConn) Triggers(table string) (map[string]Trg, error) {
 	tgs := make(map[string]Trg)
-	var sn = func(rs *sql.Rows) (er error) {
+	fn := func(rs *sql.Rows) (er error) {
 		for rs.Next() {
 			tg := Trg{}
 			if er = rs.Scan(&tg.Name, &tg.Timing, &tg.Event, &tg.Statement); er != nil {
@@ -164,7 +163,7 @@ func (m *MyConn) Triggers(table string) (map[string]Trg, error) {
 		return
 	}
 
-	err := m.Query(sn, `
+	err := m.Query(fn, `
 SELECT 
     TRIGGER_NAME,
     ACTION_TIMING,
@@ -179,9 +178,8 @@ WHERE
 	return tgs, err
 }
 
-func (m *MyConn) DdlTable(table string) (string, error) {
-	var ddl string
-	var sn = func(rs *sql.Rows) (er error) {
+func (m *MyConn) DdlTable(table string) (ddl string, err error) {
+	fn := func(rs *sql.Rows) (er error) {
 		var nm string
 		if rs.Next() {
 			if er = rs.Scan(&nm, &ddl); er != nil {
@@ -191,13 +189,12 @@ func (m *MyConn) DdlTable(table string) (string, error) {
 		return
 	}
 
-	err := m.Query(sn, `SHOW CREATE TABLE `+table)
-	return ddl, err
+	err = m.Query(fn, `SHOW CREATE TABLE `+table)
+	return
 }
 
-func (m *MyConn) DdlTrigger(trigger string) (string, error) {
-	var ddl string
-	var sn = func(rs *sql.Rows) (er error) {
+func (m *MyConn) DdlTrigger(trigger string) (ddl string, err error) {
+	fn := func(rs *sql.Rows) (er error) {
 		cnt := 7
 		var col = make([]string, cnt)
 		var ptr = make([]interface{}, cnt)
@@ -220,8 +217,8 @@ func (m *MyConn) DdlTrigger(trigger string) (string, error) {
 		return
 	}
 
-	err := m.Query(sn, `SHOW CREATE TRIGGER `+trigger)
-	return ddl, err
+	err = m.Query(fn, `SHOW CREATE TRIGGER `+trigger)
+	return
 }
 
 //

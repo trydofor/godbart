@@ -2,6 +2,7 @@ package art
 
 import (
 	"regexp"
+	"time"
 )
 
 var whiteRegexp = regexp.MustCompile("[ \t\r\n]+")
@@ -53,4 +54,12 @@ func matchEntire(reg *regexp.Regexp, str string) bool {
 		return false
 	}
 	return ps[0] == 0 && ps[1] == len(str)
+}
+
+func fmtTime(t time.Time, f string) string {
+	if len(f) == 0 {
+		return t.Format("2006-01-02 15:04:05.000")
+	} else {
+		return t.Format(f)
+	}
 }

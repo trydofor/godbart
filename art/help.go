@@ -8,11 +8,14 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
 
-func logDebug(m string, a ...interface{}) {
+// public
+
+func LogDebug(m string, a ...interface{}) {
 	if MsgLevel >= LvlDebug {
 		log.Printf("[DEBUG] "+m+"\n", a...)
 	}
@@ -47,27 +50,6 @@ func OutTrace(m string, a ...interface{}) {
 	fmt.Printf(m+"\n", a...)
 }
 
-func errorAndLog(m string, a ...interface{}) error {
-	s := fmt.Sprintf(m, a...)
-	LogError("%s", s)
-	return errors.New(s)
-}
-
-func openDbAndLog(db *DataSource) (conn *MyConn, err error) {
-	logDebug("try to open db=%s", db.Code)
-	conn = &MyConn{}
-	err = conn.Open(pref, db)
-
-	if err == nil {
-		LogTrace("successfully opened db=%s", db.Code)
-	} else {
-		LogError("failed to open db=%s, err=%v", db.Code, err)
-	}
-
-	return
-}
-
-// public
 func ExitIfError(err error, code int, format string, args ...interface{}) {
 	if err != nil {
 		args = append(args, err)
@@ -80,14 +62,6 @@ func ExitIfTrue(tru bool, code int, format string, args ...interface{}) {
 	if tru {
 		LogError(""+format+"", args...)
 		os.Exit(code)
-	}
-}
-
-func fmtTime(t time.Time, f string) string {
-	if len(f) == 0 {
-		return t.Format("2006-01-02 15:04:05.000")
-	} else {
-		return t.Format(f)
 	}
 }
 
@@ -192,4 +166,158 @@ func FileWalker(path []string, flag []string) ([]FileEntity, error) {
 	}
 
 	return files, nil
+}
+
+// private
+func errorAndLog(m string, a ...interface{}) error {
+	s := fmt.Sprintf(m, a...)
+	LogError("%s", s)
+	return errors.New(s)
+}
+
+func openDbAndLog(db *DataSource) (conn *MyConn, err error) {
+	LogDebug("try to open db=%s", db.Code)
+	conn = &MyConn{}
+	err = conn.Open(pref, db)
+
+	if err == nil {
+		LogTrace("successfully opened db=%s", db.Code)
+	} else {
+		LogError("failed to open db=%s, err=%v", db.Code, err)
+	}
+
+	return
+}
+
+func listTable(conn *MyConn, rgx []*regexp.Regexp) (rst []string, err error) {
+
+	var tbs []string
+	tbs, err = conn.Tables()
+	if err != nil {
+		LogError("failed to show tables db=%s, err=%v", conn.DbName(), err)
+		return
+	}
+
+	if len(tbs) == 0 || len(rgx) == 0 {
+		return tbs, nil
+	}
+
+	for _, r := range rgx {
+		for _, t := range tbs {
+			if matchEntire(r, t) {
+				rst = append(rst, t)
+			}
+		}
+	}
+	return
+}
+
+func walkExes(exes []*Exe, fn func(exe *Exe) error) error {
+	for _, exe := range exes {
+		er := fn(exe)
+		if er != nil {
+			return er
+		}
+		er = walkExes(exe.Sons, fn)
+		if er != nil {
+			return er
+		}
+	}
+	return nil
+}
+
+// 只支持 SEQ|TBL
+func pureRunExes(exes []*Exe, ctx map[string]interface{}, db *MyConn, fn func(exe *Exe, stm string) error) (err error) {
+	for _, exe := range exes {
+		if len(exe.Fors) == 0 {
+			err = pureOneExes(exe, ctx, db, fn)
+		} else {
+			for i, arg := range exe.Fors {
+				LogDebug("FOR exe [%d] on Arg=%s, exe=%d", i+1, arg, exe.Seg.Head)
+				var vals []string
+				switch arg.Type {
+				case CmndSeq:
+					gift := arg.Gift.(GiftSeq)
+					for j := gift.Bgn; j <= gift.End; j = j + gift.Inc {
+						v := fmt.Sprintf(gift.Fmt, j)
+						vals = append(vals, v)
+						LogDebug("FOR SEQ on Arg=%d, exe=%d, seq=%s", arg.Head, exe.Seg.Head, v)
+					}
+				case CmndTbl:
+					tblKey := arg.Hold + magicDatabaseSrcTable
+					tbls, ok := ctx[tblKey]
+					if !ok {
+						tbls, err = db.Tables()
+						if err != nil {
+							return err
+						}
+						ctx[tblKey] = tbls
+					}
+
+					reg := arg.Gift.(*regexp.Regexp)
+					for _, v := range tbls.([]string) {
+						if matchEntire(reg, v) {
+							vals = append(vals, v)
+							LogDebug("FOR TBL on Arg=%d, exe=%d, table=%s", arg.Head, exe.Seg.Head, v)
+						}
+					}
+				default:
+					return errorAndLog("unsupported FOR arg=%s", arg);
+				}
+
+				for _, v := range vals {
+					LogTrace("FOR %s on Arg=%d, exe=%d, value=%s", arg.Type, arg.Head, exe.Seg.Head, v)
+					ctx[arg.Hold] = v
+					err = pureOneExes(exe, ctx, db, fn)
+					if err != nil {
+						return
+					}
+				}
+			}
+		}
+	}
+	return
+}
+
+func pureOneExes(exe *Exe, ctx map[string]interface{}, db *MyConn, fn func(exe *Exe, stm string) error) error {
+	stm := exe.Seg.Text
+	if len(exe.Deps) > 0 {
+		// build stmt
+		var sb strings.Builder // return,stdout
+		off := 0
+		for _, dep := range exe.Deps {
+			LogDebug("parsing dep=%s", dep)
+
+			if dep.Off > off {
+				tmp := stm[off:dep.Off]
+				sb.WriteString(tmp)
+			}
+
+			off = dep.End
+			hld := dep.Str
+			if ev, ok := ctx[hld]; ok && !dep.Dyn {
+				v := ev.(string)
+				sb.WriteString(v)
+				LogDebug("static simple replace hold=%s, with value=%s", hld, v)
+			} else {
+				return errorAndLog("unsupported hold=%s in pure type, exe.head=%d, file=%s", hld, exe.Seg.Head, exe.Seg.File)
+			}
+		}
+
+		if off > 0 && off < len(stm) {
+			sb.WriteString(stm[off:])
+		}
+		if off > 0 {
+			stm = sb.String()
+		}
+	}
+
+	err := fn(exe, stm)
+	if err != nil {
+		return err
+	}
+
+	pureRunExes(exe.Sons, ctx, db, fn)
+
+	return err
 }

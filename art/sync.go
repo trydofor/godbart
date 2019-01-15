@@ -59,7 +59,7 @@ func Sync(srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regex
 					if e != nil {
 						LogError("failed to sync %d-th row on db=%s, table=%s, err=%v", i, idb, u.tbln, e)
 					} else {
-						logDebug("inserted %d-th row affects %d, db=%s, table=%s", i, a, idb, u.tbln)
+						LogDebug("inserted %d-th row affects %d, db=%s, table=%s", i, a, idb, u.tbln)
 					}
 				}
 			}()
@@ -87,7 +87,7 @@ func Sync(srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regex
 						fmt.Sprintf("insert into %s values(%s)", v, strings.Repeat(",?", ln)[1:]),
 						vals,
 					}
-					logDebug("sync %d row of table=%s", cnt, v)
+					LogDebug("sync %d row of table=%s", cnt, v)
 					for _, c := range chns {
 						c <- u
 					}

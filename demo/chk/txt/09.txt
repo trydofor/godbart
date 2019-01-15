@@ -1,0 +1,308 @@
+
+-- -- SRC ID=2, LINE=2:2
+SELECT table_name, checked_id FROM sys_hot_separation;
+
+-- -- SRC ID=8, LINE=8:8
+SELECT version FROM sys_schema_version;
+
+-- -- OUT ID=11, LINE=11:11, FOR
+-- version=2018111101;
+
+-- -- OUT ID=11, LINE=11:11, FOR
+-- version=2018111102;
+
+-- -- OUT ID=11, LINE=11:11, FOR
+-- version=2018111103;
+
+-- -- SRC ID=14, LINE=14:14
+SELECT * FROM tx_parcel;
+
+-- -- OUT ID=17, LINE=17:17, FOR
+-- id=93152
+-- create_time='2016-08-11 21:17:43'
+-- modify_time='2017-11-01 10:17:50'
+-- is_deleted=0
+-- logno=226608
+-- user_id=1
+-- warehouse=NULL
+-- sender_id=49799
+-- recver_id=80385
+-- track_num='SU160816'
+-- weight_pkg=2.75
+-- weight_dim=NULL
+-- input_time=NULL
+-- store_time=NULL
+-- shelf_time=NULL
+-- leave_time='2016-08-12 22:12:10'
+-- track_time='2016-08-20 10:32:18';
+
+-- -- OUT ID=17, LINE=17:17, FOR
+-- id=93163
+-- create_time='2016-08-11 22:49:34'
+-- modify_time='2017-11-01 10:17:50'
+-- is_deleted=0
+-- logno=226608
+-- user_id=1
+-- warehouse=NULL
+-- sender_id=14245
+-- recver_id=80649
+-- track_num='100354269562'
+-- weight_pkg=3.00
+-- weight_dim=NULL
+-- input_time='2016-08-12 06:32:13'
+-- store_time='2016-08-12 15:01:30'
+-- shelf_time=NULL
+-- leave_time='2016-08-12 22:12:07'
+-- track_time='2016-08-20 10:23:57';
+
+-- -- OUT ID=17, LINE=17:17, FOR
+-- id=278580
+-- create_time='2017-01-02 16:59:08'
+-- modify_time='2017-11-01 10:17:50'
+-- is_deleted=0
+-- logno=2481043
+-- user_id=78
+-- warehouse=NULL
+-- sender_id=93201
+-- recver_id=311828
+-- track_num='303354496818'
+-- weight_pkg=4.10
+-- weight_dim=NULL
+-- input_time=NULL
+-- store_time='2017-01-04 16:58:03'
+-- shelf_time=NULL
+-- leave_time='2017-01-04 20:15:56'
+-- track_time='2017-01-19 02:42:13';
+
+-- -- OUT ID=17, LINE=17:17, FOR
+-- id=278581
+-- create_time='2017-01-02 17:00:51'
+-- modify_time='2017-11-01 10:17:50'
+-- is_deleted=0
+-- logno=2481043
+-- user_id=78
+-- warehouse=NULL
+-- sender_id=93201
+-- recver_id=311829
+-- track_num='303762397428'
+-- weight_pkg=4.10
+-- weight_dim=NULL
+-- input_time=NULL
+-- store_time='2017-01-04 16:57:03'
+-- shelf_time=NULL
+-- leave_time='2017-01-06 17:33:45'
+-- track_time='2017-01-19 02:42:13';
+
+-- -- SRC ID=20, LINE=20:20
+SELECT * FROM tx_parcel_event;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=350213
+-- create_time='2016-08-12 15:01:30'
+-- modify_time='2016-08-12 15:01:30'
+-- is_deleted=0
+-- logno=210992
+-- user_id=1
+-- parcel_id=93163
+-- type=100
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=350946
+-- create_time='2016-08-12 22:12:07'
+-- modify_time='2016-08-12 22:12:07'
+-- is_deleted=0
+-- logno=212067
+-- user_id=1
+-- parcel_id=93163
+-- type=300
+-- source='airwayBill=999-45480293'
+-- operator_id=57
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=351370
+-- create_time='2016-08-12 22:12:07'
+-- modify_time='2016-08-12 22:12:07'
+-- is_deleted=0
+-- logno=212067
+-- user_id=1
+-- parcel_id=93152
+-- type=300
+-- source='airwayBill=999-45480293'
+-- operator_id=57
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=363385
+-- create_time='2016-08-20 10:23:57'
+-- modify_time='2016-08-20 10:23:57'
+-- is_deleted=0
+-- logno=222515
+-- user_id=1
+-- parcel_id=93163
+-- type=500
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=363390
+-- create_time='2016-08-20 10:32:18'
+-- modify_time='2016-08-20 10:32:18'
+-- is_deleted=0
+-- logno=222515
+-- user_id=1
+-- parcel_id=93152
+-- type=500
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=370091
+-- create_time='2016-08-22 13:00:32'
+-- modify_time='2016-08-22 13:00:32'
+-- is_deleted=0
+-- logno=226608
+-- user_id=1
+-- parcel_id=93163
+-- type=501
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=370092
+-- create_time='2016-08-22 13:10:05'
+-- modify_time='2016-08-22 13:10:05'
+-- is_deleted=0
+-- logno=226608
+-- user_id=1
+-- parcel_id=93152
+-- type=501
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=833144
+-- create_time='2017-01-04 16:57:03'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=663020
+-- user_id=78
+-- parcel_id=278581
+-- type=100
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=833154
+-- create_time='2017-01-04 16:58:03'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=663030
+-- user_id=78
+-- parcel_id=278580
+-- type=100
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=883598
+-- create_time='2017-01-11 23:59:37'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=710728
+-- user_id=78
+-- parcel_id=278580
+-- type=300
+-- source='airwayBill=784-29622666'
+-- operator_id=56
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=883616
+-- create_time='2017-01-11 23:59:37'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=710728
+-- user_id=78
+-- parcel_id=278581
+-- type=300
+-- source='airwayBill=784-29622666'
+-- operator_id=56
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=933048
+-- create_time='2017-01-19 02:42:13'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=756412
+-- user_id=78
+-- parcel_id=278580
+-- type=500
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=933492
+-- create_time='2017-01-19 08:48:11'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=752392
+-- user_id=78
+-- parcel_id=278581
+-- type=500
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=933614
+-- create_time='2017-01-19 02:42:13'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=756412
+-- user_id=78
+-- parcel_id=278581
+-- type=500
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=1048772
+-- create_time='2017-01-30 22:05:59'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=782423
+-- user_id=78
+-- parcel_id=278580
+-- type=502
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- OUT ID=23, LINE=23:23, FOR
+-- id=1049551
+-- create_time='2017-01-31 00:00:22'
+-- modify_time=NULL
+-- is_deleted=0
+-- logno=782423
+-- user_id=78
+-- parcel_id=278581
+-- type=502
+-- source=NULL
+-- operator_id=NULL
+-- is_closed=NULL;
+
+-- -- SRC ID=26, LINE=26:26
+SELECT * FROM tx_parcel$log;

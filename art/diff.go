@@ -8,9 +8,12 @@ import (
 )
 
 type DiffItem struct {
-	Columns  map[string]Col
-	Indexes  map[string]Idx
-	Triggers map[string]Trg
+	ColArr []string
+	ColMap map[string]Col
+	IdxArr []string
+	IdxMap map[string]Idx
+	TrgArr []string
+	TrgMap map[string]Trg
 }
 
 func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regexp) error {
@@ -52,9 +55,10 @@ func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, r
 		dcon[i] = conn
 	}
 
-	stbl, sset, err := makeTbname(scon, rgx)
+	stbl, sset, err := makeDiffTbl(scon, rgx)
+	sdnm := scon.DbName()
 	if err != nil {
-		LogFatal("failed to list tables, db=%s, err=%v", scon.DbName(), err)
+		LogFatal("failed to list tables, db=%s, err=%v", sdnm, err)
 		return err
 	}
 
@@ -63,16 +67,17 @@ func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, r
 	sdtl := make(map[string]DiffItem)
 
 	for _, con := range dcon {
-		dtbl, dset, er := makeTbname(con, rgx)
+		dtbl, dset, er := makeDiffTbl(con, rgx)
+		ddnm := con.DbName()
 		if er != nil {
-			LogFatal("failed to list tables, db=%s, err=%v", con.DbName(), er)
+			LogFatal("failed to list tables, db=%s, err=%v", ddnm, er)
 			return er
 		}
-		LogTrace("=== diff tbname ===, left=%s, right=%s", scon.DbName(), con.DbName())
+		LogTrace("=== diff tbname ===, left=%s, right=%s", sdnm, ddnm)
 
 		rep, ch := strings.Builder{}, true
-		var ih []string
-		head := fmt.Sprintf("\n#TBNAME LEFT(>)=%s, RIGHT(<)=%s", scon.DbName(), con.DbName())
+		var ih []string // 两库都有，交集
+		head := fmt.Sprintf("\n#TBNAME LEFT(>)=%s, RIGHT(<)=%s", sdnm, ddnm)
 		for _, tbl := range stbl {
 			if dset[tbl] {
 				ih = append(ih, tbl)
@@ -98,82 +103,54 @@ func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, r
 			}
 		}
 
-		if detail {
-			LogTrace("=== diff detail ===, left=%s, right=%s", scon.DbName(), con.DbName())
+		sort.Strings(ih) // 排序
 
-			e1 := makeDetail(scon, ih, sdtl, hastrg) // 比较多库，逐步添加表
+		if detail {
+			LogTrace("=== diff detail ===, left=%s, right=%s", sdnm, ddnm)
+
+			e1 := makeDiffAll(scon, ih, sdtl, hastrg) // 比较多库，逐步添加表
 			if e1 != nil {
 				return e1
 			}
 
 			ddtl := make(map[string]DiffItem) // 当前比较项
-			e2 := makeDetail(con, ih, ddtl, hastrg)
+			e2 := makeDiffAll(con, ih, ddtl, hastrg)
 			if e2 != nil {
 				return e2
 			}
 
-			diffDetail(sdtl, ddtl, &rep, scon.DbName(), con.DbName())
+			diffAll(ih, sdtl, ddtl, &rep, sdnm, ddnm)
 		}
 
 		if rep.Len() > 0 {
-			LogTrace("== HAS SOME DIFF ==. LEFT=%s, RIGHT=%s", scon.DbName(), con.DbName())
+			LogTrace("== HAS SOME DIFF ==. LEFT=%s, RIGHT=%s", sdnm, ddnm)
 			OutTrace(rep.String())
 		} else {
-			LogTrace("== ALL THE SAME ==. LEFT=%s, RIGHT=%s", scon.DbName(), con.DbName())
+			LogTrace("== ALL THE SAME ==. LEFT=%s, RIGHT=%s", sdnm, ddnm)
 		}
 	}
 
 	return nil
 }
 
-func makeDetail(con *MyConn, tbl []string, dtl map[string]DiffItem, trg bool) error {
-	for _, t := range tbl {
-		_, ok := dtl[t]
-		if !ok {
-			cls, err := con.Columns(t)
-			if err != nil {
-				LogError("failed to list columns, table=%s, db=%s, err=%v", t, con.DbName(), err)
-				return err
-			}
-			ixs, err := con.Indexes(t)
-			if err != nil {
-				LogError("failed to list indexes, table=%s, db=%s, err=%v", t, con.DbName(), err)
-				return err
-			}
-
-			var tgs map[string]Trg
-			if trg {
-				tgs, err = con.Triggers(t)
-				if err != nil {
-					LogError("failed to list triggers, table=%s, db=%s, err=%v", t, con.DbName(), err)
-					return err
-				}
-			}
-
-			dtl[t] = DiffItem{cls, ixs, tgs}
-		}
-	}
-	return nil
-}
-
-func diffCol(lc, rc map[string]Col, rep *strings.Builder) {
-	if len(lc) == 0 && len(rc) == 0 {
+func diffCol(ld, rd DiffItem, rep *strings.Builder) {
+	if len(ld.ColArr) == 0 && len(rd.ColArr) == 0 {
 		return
 	}
 
-	var ic []Col
-	// 左侧有，右侧没有
+	la, ra := ld.ColArr, rd.ColArr
+	lm, rm := ld.ColMap, rd.ColMap
 
 	tit := "=Col Only Name"
 	fc := len(tit)
-	for k := range lc {
+	for k := range lm {
 		i := len(k)
 		if i > fc {
 			fc = i
 		}
 	}
 
-	off := len(lc) - len(rc)
+	off := len(lm) - len(rm)
 
 	pad := fmt.Sprintf("%d", fc)
 	head := "\n" + tit + strings.Repeat(" ", fc-len(tit)) + " | No. | Type | Nullable | Default | Comment | Extra"
@@ -182,16 +159,18 @@ func diffCol(lc, rc map[string]Col, rep *strings.Builder) {
 	fmtb := "\n%-" + pad + "s | %s | %s | %s | %s | %s | %s"
 
 	fmth := func(c *Col, tok string) {
-		d := null
+		dvl := null
 		if c.Deft.Valid {
-			d = c.Deft.String
+			dvl = c.Deft.String
 		}
-		rep.WriteString(fmt.Sprintf(fmto, tok+c.Name, c.Seq, c.Type, c.Null, d, c.Key, c.Cmnt, c.Extr))
+		rep.WriteString(fmt.Sprintf(fmto, tok+c.Name, c.Seq, c.Type, c.Null, dvl, c.Cmnt, c.Extr))
 	}
 
+	var ic []Col
 	ch := true
-	for c, li := range lc {
-		ri, ok := rc[c]
+	for _, c := range la {
+		li :=  lm[c]
+		ri, ok := rm[c]
 		if ok {
 			ic = append(ic, li, ri)
 		} else {
@@ -204,8 +183,9 @@ func diffCol(lc, rc map[string]Col, rep *strings.Builder) {
 	}
 
 	// 右侧有，左侧没有
-	for c, ri := range rc {
-		_, ok := lc[c]
+	for _, c := range ra {
+		ri := rm[c]
+		_, ok := lm[c]
 		if !ok {
 			if ch {
 				rep.WriteString(head)
@@ -273,18 +253,19 @@ func diffCol(lc, rc map[string]Col, rep *strings.Builder) {
 	}
 }
 
-func diffIdx(lc, rc map[string]Idx, rep *strings.Builder) {
-	if len(lc) == 0 && len(rc) == 0 {
+func diffIdx(ld, rd DiffItem, rep *strings.Builder) {
+	if len(ld.IdxArr) == 0 && len(rd.IdxArr) == 0 {
 		return
 	}
 
-	var ic []Idx
-	// 左侧有，右侧没有
+	la, ra := ld.IdxArr, rd.IdxArr
+	lm, rm := ld.IdxMap, rd.IdxMap
+
 	ch, ih := true, true
 
 	tit := "=Idx Only Name"
 	fc := len(tit)
-	for k := range lc {
+	for k := range lm {
 		i := len(k)
 		if i > fc {
 			fc = i
@@ -296,8 +277,10 @@ func diffIdx(lc, rc map[string]Idx, rep *strings.Builder) {
 	fmto := "\n%-" + pad + "s | %t | %s | %s"
 	fmtb := "\n%-" + pad + "s | %s | %s | %s"
 
-	for c, li := range lc {
-		ri, ok := rc[c]
+	var ic []Idx
+	for _, c := range la {
+		li := lm[c]
+		ri, ok := lm[c]
 		if ok {
 			ic = append(ic, li, ri)
 		} else {
@@ -310,8 +293,9 @@ func diffIdx(lc, rc map[string]Idx, rep *strings.Builder) {
 	}
 
 	// 右侧有，左侧没有
-	for c, ri := range rc {
-		_, ok := lc[c]
+	for _, c := range ra {
+		ri := rm[c]
+		_, ok := lm[c]
 		if !ok {
 			if ch {
 				ch = false
@@ -352,18 +336,20 @@ func diffIdx(lc, rc map[string]Idx, rep *strings.Builder) {
 	}
 }
 
-func diffTrg(lc, rc map[string]Trg, rep *strings.Builder) {
-	if len(lc) == 0 && len(rc) == 0 {
+func diffTrg(ld, rd DiffItem, rep *strings.Builder) {
+	if len(ld.TrgArr) == 0 && len(rd.TrgArr) == 0 {
 		return
 	}
 
-	var ic []Trg
-	// 左侧有，右侧没有
+	la, ra := ld.TrgArr, rd.TrgArr
+	lm, rm := ld.TrgMap, rd.TrgMap
+
+
 	ch, ih := true, true
 
 	tit := "=Trg Only Name"
 	fc := len(tit)
-	for k := range lc {
+	for k := range lm {
 		i := len(k)
 		if i > fc {
 			fc = i
@@ -375,8 +361,10 @@ func diffTrg(lc, rc map[string]Trg, rep *strings.Builder) {
 	fmto := "\n%-" + pad + "s | %s | %s | %q"
 	fmtb := "\n%-" + pad + "s | %s | %s | %s"
 
-	for c, li := range lc {
-		ri, ok := rc[c]
+	var ic []Trg
+	for _, c := range la {
+		li := lm[c]
+		ri, ok := rm[c]
 		if ok {
 			ic = append(ic, li, ri)
 		} else {
@@ -389,8 +377,9 @@ func diffTrg(lc, rc map[string]Trg, rep *strings.Builder) {
 	}
 
 	// 右侧有，左侧没有
-	for c, ri := range rc {
-		_, ok := lc[c]
+	for _,c := range ra {
+		ri := rm[c]
+		_, ok := lm[c]
 		if !ok {
 			if ch {
 				ch = false
@@ -434,17 +423,17 @@ func trimStatement(str string) string {
 	return str
 }
 
-func diffDetail(lit, rit map[string]DiffItem, rep *strings.Builder, ldb, rdb string) {
+func diffAll(tbl []string, lit, rit map[string]DiffItem, rep *strings.Builder, ldb, rdb string) {
 	// 右侧是左侧的子集
-	for tb, rd := range rit {
-		ld := lit[tb]
+	for _, tb := range tbl {
+		ld, rd := lit[tb], rit[tb]
 		sb := &strings.Builder{}
 		// column
-		diffCol(ld.Columns, rd.Columns, sb)
+		diffCol(ld, rd, sb)
 		// index
-		diffIdx(ld.Indexes, rd.Indexes, sb)
+		diffIdx(ld, rd, sb)
 		// trigger
-		diffTrg(ld.Triggers, rd.Triggers, sb)
+		diffTrg(ld, rd, sb)
 
 		if sb.Len() > 0 {
 			rep.WriteString(fmt.Sprintf("\n#DETAIL TABLE=%s, LEFT(>)=%s, RIGHT(<)=%s", tb, ldb, rdb))
@@ -453,11 +442,12 @@ func diffDetail(lit, rit map[string]DiffItem, rep *strings.Builder, ldb, rdb str
 	}
 }
 
-func makeTbname(conn *MyConn, rgx []*regexp.Regexp) (rst []string, set map[string]bool, err error) {
+func makeDiffTbl(conn *MyConn, rgx []*regexp.Regexp) (rst []string, set map[string]bool, err error) {
 	rst, err = listTable(conn, rgx)
 	if err != nil {
 		return
 	}
+	sort.Strings(rst)
 
 	set = make(map[string]bool)
 	for _, v := range rst {
@@ -467,68 +457,118 @@ func makeTbname(conn *MyConn, rgx []*regexp.Regexp) (rst []string, set map[strin
 	return
 }
 
+func makeDiffAll(con *MyConn, tbl []string, dtl map[string]DiffItem, trg bool) error {
+	for _, t := range tbl {
+		_, ok := dtl[t]
+		if !ok {
+			var cla, ixa, tga []string
+
+			clm, err := con.Columns(t)
+			if err != nil {
+				LogError("failed to list columns, table=%s, db=%s, err=%v", t, con.DbName(), err)
+				return err
+			}
+			if ln := len(clm); ln > 0 {
+				tmp := make([]Col, 0, ln)
+				for _, v := range clm {
+					tmp = append(tmp, v)
+				}
+				sort.Slice(tmp, func(i, j int) bool {
+					return tmp[i].Seq < tmp[j].Seq
+				})
+				cla = make([]string, ln)
+				for i, v := range tmp {
+					cla[i] = v.Name
+				}
+			}
+
+			ixm, err := con.Indexes(t)
+			if err != nil {
+				LogError("failed to list indexes, table=%s, db=%s, err=%v", t, con.DbName(), err)
+				return err
+			}
+			if ln := len(ixm); ln > 0 {
+				ixa = make([]string, 0, ln)
+				for k, _ := range ixm {
+					ixa = append(ixa, k)
+				}
+				sort.Strings(ixa)
+			}
+
+			var tgm map[string]Trg
+			if trg {
+				tgm, err = con.Triggers(t)
+				if err != nil {
+					LogError("failed to list triggers, table=%s, db=%s, err=%v", t, con.DbName(), err)
+					return err
+				}
+				if ln := len(tgm); ln > 0 {
+					tga = make([]string, 0, ln)
+					for k, _ := range tgm {
+						tga = append(tga, k)
+					}
+					sort.Strings(tga)
+				}
+			}
+
+			dtl[t] = DiffItem{cla, clm, ixa, ixm, tga, tgm}
+		}
+	}
+	return nil
+}
+
 func showCreate(pref *Preference, conn *MyConn, rgx []*regexp.Regexp) {
 	tbs, err := listTable(conn, rgx)
 	if err != nil {
 		return
 	}
 
+	dbn := conn.DbName()
+	drw := pref.DelimiterRaw
+	dcm := pref.DelimiterCmd
+	dlc := pref.LineComment
+
 	if len(tbs) == 0 {
-		LogTrace("no tables on db=%s, err=%v", conn.DbName(), err)
+		LogTrace("no tables on db=%s, err=%v", dbn, err)
 		return
 	}
 
 	sort.Strings(tbs)
 
 	c := len(tbs)
-	for i, v := range tbs {
-		LogTrace("db=%s, %d/%d, table=%s", conn.DbName(), i+1, c, v)
-		tb, e := conn.DdlTable(v)
+	for i, tn := range tbs {
+		LogTrace("db=%s, %d/%d, table=%s", dbn, i+1, c, tn)
+		tb, e := conn.DdlTable(tn)
 		if e != nil {
-			LogError("db=%s, failed to dll table=%s", conn.DbName(), v)
+			LogError("db=%s, failed to dll table=%s", dbn, tn)
 		} else {
-			ddl := fmt.Sprintf("DROP TABLE IF EXISTS `%s`%s\n%s%s\n", v, pref.DelimiterRaw, tb, pref.DelimiterRaw)
-			OutTrace("%s db=%s, %d/%d, table=%s\n%s", pref.LineComment, conn.DbName(), i+1, c, v, ddl)
+			ddl := fmt.Sprintf("DROP TABLE IF EXISTS `%s`%s\n%s%s\n", tn, drw, tb, drw)
+			OutTrace("%s db=%s, %d/%d, table=%s\n%s", dlc, dbn, i+1, c, tn, ddl)
 		}
 
-		tgs, e := conn.Triggers(v)
+		tgs, e := conn.Triggers(tn)
 		if e != nil {
-			LogError("db=%s, failed to get triggers=%s", conn.DbName(), v)
+			LogError("db=%s, failed to get triggers=%s", dbn, tn)
 		} else {
-			for _, g := range tgs {
-				tg, r := conn.DdlTrigger(g.Name)
-				if r != nil {
-					LogError("db=%s, failed to ddl trigger=%s, table=%s", conn.DbName(), g.Name, v)
-				} else {
-					ddl := fmt.Sprintf("DROP TRIGGER IF EXISTS `%s` %s\n%s $$\n%s $$\n%s %s\n", g.Name, pref.DelimiterRaw, pref.DelimiterCmd, tg, pref.DelimiterCmd, pref.DelimiterRaw)
-					OutTrace("%s db=%s, trigger=%s, table=%s\n%s", pref.LineComment, conn.DbName(), g.Name, v, ddl)
+			if cnt := len(tgs); cnt > 0 {
+				tns := make([]string, 0, cnt)
+				for k, _ := range tgs {
+					tns = append(tns, k)
+				}
+				sort.Strings(tns)
+
+				for _, k := range tns {
+					tg, r := conn.DdlTrigger(k)
+					if r != nil {
+						LogError("db=%s, failed to ddl trigger=%s, table=%s", dbn, k, tn)
+					} else {
+						ddl := fmt.Sprintf("DROP TRIGGER IF EXISTS `%s` %s\n%s $$\n%s $$\n%s %s\n", k, drw, dcm, tg, dcm, drw)
+						OutTrace("%s db=%s, trigger=%s, table=%s\n%s", dlc, dbn, k, tn, ddl)
+					}
 				}
 			}
 		}
 	}
 
-	return
-}
-
-func listTable(conn *MyConn, rgx []*regexp.Regexp) (rst []string, err error) {
-
-	var tbs []string
-	tbs, err = conn.Tables()
-	if err != nil {
-		LogError("failed to show tables db=%s, err=%v", conn.DbName(), err)
-		return
-	}
-
-	if len(tbs) == 0 || len(rgx) == 0 {
-		return tbs, nil
-	}
-
-	for _, t := range tbs {
-		for _, r := range rgx {
-			if r.MatchString(t) {
-				rst = append(rst, t)
-			}
-		}
-	}
 	return
 }

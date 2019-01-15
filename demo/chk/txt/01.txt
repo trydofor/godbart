@@ -1,0 +1,14 @@
+-- -- SRC ID=2, LINE=2:2
+SHOW DATABASES LIKE 'godbart_%';
+
+-- -- OUT ID=5, LINE=5:5, FOR
+-- CHK='godbart_dev_main';
+
+-- -- OUT ID=5, LINE=5:5, FOR
+-- CHK='godbart_lcl_main';
+
+-- -- OUT ID=5, LINE=5:5, FOR
+-- CHK='godbart_prd_2018';
+
+-- -- OUT ID=5, LINE=5:5, FOR
+-- CHK='godbart_prd_main';

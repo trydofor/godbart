@@ -1,0 +1,217 @@
+
+-- -- SRC ID=9, LINE=9:9, DEP
+SELECT * FROM tx_parcel WHERE create_time <= '2018-01-01 00:00:00';
+
+-- -- OUT ID=12, LINE=12:12, FOR
+-- REPLACE INTO tx_parcel VALUES (93152,'2016-08-11 21:17:43','2017-11-01 10:17:50',0,226608,1,NULL,49799,80385,'SU160816',2.75,NULL,NULL,NULL,NULL,'2016-08-12 22:12:10','2016-08-20 10:32:18');
+
+-- -- SRC ID=17, LINE=17:17, DEP
+SELECT * FROM tx_track WHERE track_num = 'SU160816';
+
+-- -- OUT ID=20, LINE=20:20, FOR
+-- REPLACE INTO tx_track VALUES (172204,'2016-08-11 21:17:43','2016-12-09 16:28:24',0,222515,1,93152,200,'SU160816','[{\"date\":\"2016-08-11 10:31:53\",\"info\":\"【纽约】美东仓库已揽件\",\"status\":100},{\"date\":\"2016-08-12 22:12:10\",\"info\":\"【纽约】包裹已从中转仓离开\",\"status\":200},{\"date\":\"2016-08-13 17:52:19\",\"info\":\"【纽约】干线航班已从【纽约肯尼迪国际机场】起飞，航班号：CA982\",\"status\":300},{\"date\":\"2016-08-17 08:46:33\",\"info\":\"【哈尔滨】干线航班已到达【哈尔滨太平国际机场】\",\"status\":300},{\"date\":\"2016-08-18 09:18:31\",\"info\":\"【哈尔滨】包裹清关中\",\"status\":400},{\"date\":\"2016-08-20 10:35:55\",\"info\":\"清关完成，正在国内配送\",\"status\":500}]',500,NULL);
+
+-- -- SRC ID=23, LINE=23:23, FOR
+DELETE FROM tx_track where id = 172204;
+
+-- -- SRC ID=54, LINE=54:54, END
+REPLACE INTO sys_hot_separation VALUES ('tx_track', /*内嵌多行注释*/ 172204, now());
+
+-- -- SRC ID=28, LINE=28:28, DEP
+SELECT * FROM tx_parcel_event WHERE parcel_id = 93152;
+
+-- -- OUT ID=31, LINE=31:32, FOR
+-- INSERT INTO tx_parcel_event VALUES (351370,'2016-08-12 22:12:07','2016-08-12 22:12:07',0,212067,1,93152,300,'airwayBill=999-45480293',57,NULL)
+-- ON DUPLICATE KEY UPDATE modify_time = '2018-01-01 00:00:00';
+
+-- -- OUT ID=31, LINE=31:32, FOR
+-- INSERT INTO tx_parcel_event VALUES (363390,'2016-08-20 10:32:18','2016-08-20 10:32:18',0,222515,1,93152,500,NULL,NULL,NULL)
+-- ON DUPLICATE KEY UPDATE modify_time = '2018-01-01 00:00:00';
+
+-- -- OUT ID=31, LINE=31:32, FOR
+-- INSERT INTO tx_parcel_event VALUES (370092,'2016-08-22 13:10:05','2016-08-22 13:10:05',0,226608,1,93152,501,NULL,NULL,NULL)
+-- ON DUPLICATE KEY UPDATE modify_time = '2018-01-01 00:00:00';
+
+-- -- SRC ID=35, LINE=35:35, END
+DELETE FROM tx_parcel_event where parcel_id = 93152;
+
+-- -- SRC ID=51, LINE=51:51, END
+REPLACE INTO sys_hot_separation VALUES ('tx_parcel_event', 370092, now()); -- 单行注释;
+
+-- -- SRC ID=41, LINE=41:41, DEP
+SELECT * FROM tx_receiver WHERE id = 80385;
+
+-- -- OUT ID=44, LINE=44:44, FOR
+-- REPLACE INTO tx_receiver (id,create_time,modify_time,is_deleted,logno,user_id,name,phone,postcode,country,province,city,district,address1,address2,hash) VALUES (80385,'2016-08-11 21:17:43','2017-12-08 07:10:14',0,-2500,1,'张三','13000000001','310000',2,'ZJ','杭州市',NULL,'上城区江城路候潮公寓',NULL,'');
+
+-- -- SRC ID=47, LINE=47:47, FOR
+DELETE FROM tx_receiver where id = 80385;
+
+-- -- SRC ID=60, LINE=60:60, FOR
+DELETE FROM tx_parcel where id = 93152;
+
+-- -- OUT ID=12, LINE=12:12, FOR
+-- REPLACE INTO tx_parcel VALUES (93163,'2016-08-11 22:49:34','2017-11-01 10:17:50',0,226608,1,NULL,14245,80649,'100354269562',3.00,NULL,'2016-08-12 06:32:13','2016-08-12 15:01:30',NULL,'2016-08-12 22:12:07','2016-08-20 10:23:57');
+
+-- -- SRC ID=17, LINE=17:17, DEP
+SELECT * FROM tx_track WHERE track_num = '100354269562';
+
+-- -- OUT ID=20, LINE=20:20, FOR
+-- REPLACE INTO tx_track VALUES (172215,'2016-08-11 22:49:34','2016-12-09 16:28:24',0,222515,1,93163,200,'100354269562','[{\"date\":\"2016-08-11 22:49:34\",\"info\":\"【纽约】美东仓库已揽件\",\"status\":100},{\"date\":\"2016-08-12 22:12:07\",\"info\":\"【纽约】包裹已从中转仓离开\",\"status\":200}]',200,NULL);
+
+-- -- SRC ID=23, LINE=23:23, FOR
+DELETE FROM tx_track where id = 172215;
+
+-- -- SRC ID=54, LINE=54:54, END
+REPLACE INTO sys_hot_separation VALUES ('tx_track', /*内嵌多行注释*/ 172215, now());
+
+-- -- SRC ID=28, LINE=28:28, DEP
+SELECT * FROM tx_parcel_event WHERE parcel_id = 93163;
+
+-- -- OUT ID=31, LINE=31:32, FOR
+-- INSERT INTO tx_parcel_event VALUES (350213,'2016-08-12 15:01:30','2016-08-12 15:01:30',0,210992,1,93163,100,NULL,NULL,NULL)
+-- ON DUPLICATE KEY UPDATE modify_time = '2018-01-01 00:00:00';
+
+-- -- OUT ID=31, LINE=31:32, FOR
+-- INSERT INTO tx_parcel_event VALUES (350946,'2016-08-12 22:12:07','2016-08-12 22:12:07',0,212067,1,93163,300,'airwayBill=999-45480293',57,NULL)
+-- ON DUPLICATE KEY UPDATE modify_time = '2018-01-01 00:00:00';
+
+-- -- OUT ID=31, LINE=31:32, FOR
+-- INSERT INTO tx_parcel_event VALUES (363385,'2016-08-20 10:23:57','2016-08-20 10:23:57',0,222515,1,93163,500,NULL,NULL,NULL)
+-- ON DUPLICATE KEY UPDATE modify_time = '2018-01-01 00:00:00';
+
+-- -- OUT ID=31, LINE=31:32, FOR
+-- INSERT INTO tx_parcel_event VALUES (370091,'2016-08-22 13:00:32','2016-08-22 13:00:32',0,226608,1,93163,501,NULL,NULL,NULL)
+-- ON DUPLICATE KEY UPDATE modify_time = '2018-01-01 00:00:00';
+
+-- -- SRC ID=35, LINE=35:35, END
+DELETE FROM tx_parcel_event where parcel_id = 93163;
+
+-- -- SRC ID=51, LINE=51:51, END
+REPLACE INTO sys_hot_separation VALUES ('tx_parcel_event', 370091, now()); -- 单行注释;
+
+-- -- SRC ID=41, LINE=41:41, DEP
+SELECT * FROM tx_receiver WHERE id = 80649;
+
+-- -- OUT ID=44, LINE=44:44, FOR
+-- REPLACE INTO tx_receiver (id,create_time,modify_time,is_deleted,logno,user_id,name,phone,postcode,country,province,city,district,address1,address2,hash) VALUES (80649,'2016-08-12 06:32:13','2017-12-08 07:10:14',0,-2500,1,'张山','13000000002','311500',2,'ZJ','杭州市',NULL,'桐庐县分水镇东门雅苑','','');
+
+-- -- SRC ID=47, LINE=47:47, FOR
+DELETE FROM tx_receiver where id = 80649;
+
+-- -- SRC ID=60, LINE=60:60, FOR
+DELETE FROM tx_parcel where id = 93163;
+
+-- -- OUT ID=12, LINE=12:12, FOR
+-- REPLACE INTO tx_parcel VALUES (278580,'2017-01-02 16:59:08','2017-11-01 10:17:50',0,2481043,78,NULL,93201,311828,'303354496818',4.10,NULL,NULL,'2017-01-04 16:58:03',NULL,'2017-01-04 20:15:56','2017-01-19 02:42:13');
+
+-- -- SRC ID=17, LINE=17:17, DEP
+SELECT * FROM tx_track WHERE track_num = '303354496818';
+
+-- -- OUT ID=20, LINE=20:20, FOR
+-- REPLACE INTO tx_track VALUES (369647,'2017-01-04 16:58:03','2017-03-03 02:36:59',0,1025160,78,278580,200,'303354496818','[{\"date\":\"2017-01-04 16:58:03\",\"info\":\"【纽约】美东仓库已揽件\",\"status\":100},{\"date\":\"2017-01-13 09:37:21\",\"info\":\"【纽约】包裹已从纽约肯尼迪国际机场发出\",\"status\":200},{\"date\":\"2017-01-13 13:37:42\",\"info\":\"【纽约】干线航班已从【纽约肯尼迪国际机场】起飞，航班号：CZ600\",\"status\":300}]',300,NULL);
+
+-- -- SRC ID=23, LINE=23:23, FOR
+DELETE FROM tx_track where id = 369647;
+
+-- -- SRC ID=54, LINE=54:54, END
+REPLACE INTO sys_hot_separation VALUES ('tx_track', /*内嵌多行注释*/ 369647, now());
+
+-- -- SRC ID=28, LINE=28:28, DEP
+SELECT * FROM tx_parcel_event WHERE parcel_id = 278580;
+
+-- -- OUT ID=31, LINE=31:32, FOR
+-- INSERT INTO tx_parcel_event VALUES (833154,'2017-01-04 16:58:03',NULL,0,663030,78,278580,100,NULL,NULL,NULL)
+-- ON DUPLICATE KEY UPDATE modify_time = '2018-01-01 00:00:00';
+
+-- -- OUT ID=31, LINE=31:32, FOR
+-- INSERT INTO tx_parcel_event VALUES (883598,'2017-01-11 23:59:37',NULL,0,710728,78,278580,300,'airwayBill=784-29622666',56,NULL)
+-- ON DUPLICATE KEY UPDATE modify_time = '2018-01-01 00:00:00';
+
+-- -- OUT ID=31, LINE=31:32, FOR
+-- INSERT INTO tx_parcel_event VALUES (933048,'2017-01-19 02:42:13',NULL,0,756412,78,278580,500,NULL,NULL,NULL)
+-- ON DUPLICATE KEY UPDATE modify_time = '2018-01-01 00:00:00';
+
+-- -- OUT ID=31, LINE=31:32, FOR
+-- INSERT INTO tx_parcel_event VALUES (1048772,'2017-01-30 22:05:59',NULL,0,782423,78,278580,502,NULL,NULL,NULL)
+-- ON DUPLICATE KEY UPDATE modify_time = '2018-01-01 00:00:00';
+
+-- -- SRC ID=35, LINE=35:35, END
+DELETE FROM tx_parcel_event where parcel_id = 278580;
+
+-- -- SRC ID=51, LINE=51:51, END
+REPLACE INTO sys_hot_separation VALUES ('tx_parcel_event', 1048772, now()); -- 单行注释;
+
+-- -- SRC ID=41, LINE=41:41, DEP
+SELECT * FROM tx_receiver WHERE id = 311828;
+
+-- -- OUT ID=44, LINE=44:44, FOR
+-- REPLACE INTO tx_receiver (id,create_time,modify_time,is_deleted,logno,user_id,name,phone,postcode,country,province,city,district,address1,address2,hash) VALUES (311828,'2017-01-02 16:59:08','2017-12-08 07:10:14',0,-2500,78,'李四','13000000003','200000',2,'SH','上海','徐汇区','华泾路1425弄','','');
+
+-- -- SRC ID=47, LINE=47:47, FOR
+DELETE FROM tx_receiver where id = 311828;
+
+-- -- SRC ID=60, LINE=60:60, FOR
+DELETE FROM tx_parcel where id = 278580;
+
+-- -- OUT ID=12, LINE=12:12, FOR
+-- REPLACE INTO tx_parcel VALUES (278581,'2017-01-02 17:00:51','2017-11-01 10:17:50',0,2481043,78,NULL,93201,311829,'303762397428',4.10,NULL,NULL,'2017-01-04 16:57:03',NULL,'2017-01-06 17:33:45','2017-01-19 02:42:13');
+
+-- -- SRC ID=17, LINE=17:17, DEP
+SELECT * FROM tx_track WHERE track_num = '303762397428';
+
+-- -- OUT ID=20, LINE=20:20, FOR
+-- REPLACE INTO tx_track VALUES (369644,'2017-01-04 16:57:03','2017-03-03 02:37:12',0,1024502,78,278581,200,'303762397428','[{\"date\":\"2017-01-04 16:57:03\",\"info\":\"【纽约】美东仓库已揽件\",\"status\":100},{\"date\":\"2017-01-13 09:37:21\",\"info\":\"【纽约】包裹已从纽约肯尼迪国际机场发出\",\"status\":200},{\"date\":\"2017-01-13 13:37:42\",\"info\":\"【纽约】干线航班已从【纽约肯尼迪国际机场】起飞，航班号：CZ600\",\"status\":300},{\"date\":\"2017-01-14 09:03:0\",\"info\":\"【广州】干线航班已到达【广州白云国际机场】\",\"status\":300},{\"date\":\"2017-01-15 12:42:11\",\"info\":\"【广州】干线航班已从【广州白云国际机场】起飞，航班号：CA3615\",\"status\":300},{\"date\":\"2017-01-15 13:37:42\",\"info\":\"【哈尔滨】干线航班已到达【哈尔滨太平国际机场】\",\"status\":300},{\"date\":\"2017-01-15 13:40:35\",\"info\":\"【哈尔滨】包裹清关中\",\"status\":400},{\"date\":\"2017-01-18 00:18:20\",\"info\":\"清关完成，正在国内配送\",\"status\":500}]',500,NULL);
+
+-- -- SRC ID=23, LINE=23:23, FOR
+DELETE FROM tx_track where id = 369644;
+
+-- -- SRC ID=54, LINE=54:54, END
+REPLACE INTO sys_hot_separation VALUES ('tx_track', /*内嵌多行注释*/ 369644, now());
+
+-- -- SRC ID=28, LINE=28:28, DEP
+SELECT * FROM tx_parcel_event WHERE parcel_id = 278581;
+
+-- -- OUT ID=31, LINE=31:32, FOR
+-- INSERT INTO tx_parcel_event VALUES (833144,'2017-01-04 16:57:03',NULL,0,663020,78,278581,100,NULL,NULL,NULL)
+-- ON DUPLICATE KEY UPDATE modify_time = '2018-01-01 00:00:00';
+
+-- -- OUT ID=31, LINE=31:32, FOR
+-- INSERT INTO tx_parcel_event VALUES (883616,'2017-01-11 23:59:37',NULL,0,710728,78,278581,300,'airwayBill=784-29622666',56,NULL)
+-- ON DUPLICATE KEY UPDATE modify_time = '2018-01-01 00:00:00';
+
+-- -- OUT ID=31, LINE=31:32, FOR
+-- INSERT INTO tx_parcel_event VALUES (933492,'2017-01-19 08:48:11',NULL,0,752392,78,278581,500,NULL,NULL,NULL)
+-- ON DUPLICATE KEY UPDATE modify_time = '2018-01-01 00:00:00';
+
+-- -- OUT ID=31, LINE=31:32, FOR
+-- INSERT INTO tx_parcel_event VALUES (933614,'2017-01-19 02:42:13',NULL,0,756412,78,278581,500,NULL,NULL,NULL)
+-- ON DUPLICATE KEY UPDATE modify_time = '2018-01-01 00:00:00';
+
+-- -- OUT ID=31, LINE=31:32, FOR
+-- INSERT INTO tx_parcel_event VALUES (1049551,'2017-01-31 00:00:22',NULL,0,782423,78,278581,502,NULL,NULL,NULL)
+-- ON DUPLICATE KEY UPDATE modify_time = '2018-01-01 00:00:00';
+
+-- -- SRC ID=35, LINE=35:35, END
+DELETE FROM tx_parcel_event where parcel_id = 278581;
+
+-- -- SRC ID=51, LINE=51:51, END
+REPLACE INTO sys_hot_separation VALUES ('tx_parcel_event', 1049551, now()); -- 单行注释;
+
+-- -- SRC ID=41, LINE=41:41, DEP
+SELECT * FROM tx_receiver WHERE id = 311829;
+
+-- -- OUT ID=44, LINE=44:44, FOR
+-- REPLACE INTO tx_receiver (id,create_time,modify_time,is_deleted,logno,user_id,name,phone,postcode,country,province,city,district,address1,address2,hash) VALUES (311829,'2017-01-02 17:00:51','2017-12-08 07:10:14',0,-2500,78,'李思','13000000004','200000',2,'SH','上海','徐汇区','华泾路1427弄1','','');
+
+-- -- SRC ID=47, LINE=47:47, FOR
+DELETE FROM tx_receiver where id = 311829;
+
+-- -- SRC ID=60, LINE=60:60, FOR
+DELETE FROM tx_parcel where id = 278581;
+
+-- -- SRC ID=57, LINE=57:57, END
+REPLACE INTO sys_hot_separation VALUES ('tx_parcel', 278581, now());
+
+-- -- SRC ID=63, LINE=63:63, END
+DELETE FROM tx_parcel$log WHERE create_time <= '2018-01-01 00:00:00';

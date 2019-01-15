@@ -38,7 +38,7 @@ func Tree(pref *Preference, envs map[string]string, srce *DataSource, dest []*Da
 	}
 
 	for _, exe := range sqlx {
-		er := RunTreeSqlx(pref, exe, scon, dcon, risk)
+		er := TreeRunSqlx(pref, exe, scon, dcon, risk)
 		if er != nil {
 			return er
 		}
@@ -83,7 +83,7 @@ func stmtEnv(v string, src *MyConn, tmp map[string]string) (rst string, has bool
 		}
 
 		stm := ptn[2][qc : len(ptn[2])-qc]
-		logDebug("deal runtime Env, exec sql=%s", stm)
+		LogDebug("deal runtime Env, exec sql=%s", stm)
 		err = src.Query(func(row *sql.Rows) error {
 			cols, er := row.ColumnTypes()
 			if er != nil {
@@ -131,7 +131,7 @@ type exeStat struct {
 	cntsrc int64
 }
 
-func RunTreeSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, risk bool) error {
+func TreeRunSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, risk bool) error {
 
 	para := &exeStat{}
 	para.startd = time.Now()
@@ -148,7 +148,7 @@ func RunTreeSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, ris
 			return e
 		}
 		if h {
-			logDebug("put runtime Env, hld=%s, val=%s", k, r)
+			LogDebug("put runtime Env, hld=%s, val=%s", k, r)
 			para.valctx[k] = r
 		} else {
 			para.valctx[k] = v
@@ -199,7 +199,7 @@ func RunTreeSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, ris
 	}
 
 	for _, exe := range sqlx.Exes {
-		er := runTreeExe(exe, src, dst, para, 1)
+		er := treeRunExe(exe, src, dst, para, 1)
 		if er != nil {
 			return er
 		}
@@ -216,17 +216,17 @@ func RunTreeSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, ris
 
 var defValCol = regexp.MustCompile(`(VAL|COL)\[([^\[\]]*)\]`)
 
-func runTreeExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) (err error) {
+func treeRunExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) (err error) {
 
 	// 判断数据源和执行条件
 	if arg, igr := skipHasNotRun(src, exe.Acts, para.valctx); igr {
-		logDebug("SKIP exe on Condition. arg=%d, seg=%d", arg.Head, exe.Seg.Head)
+		LogDebug("SKIP exe on Condition. arg=%d, seg=%d", arg.Head, exe.Seg.Head)
 		return
 	}
 
 	if len(exe.Fors) > 0 {
 		for i, arg := range exe.Fors {
-			logDebug("FOR exe [%d] on Arg=%s, exe=%d", i+1, arg, exe.Seg.Head)
+			LogDebug("FOR exe [%d] on Arg=%s, exe=%d", i+1, arg, exe.Seg.Head)
 			var vals []string
 			switch arg.Type {
 			case CmndSeq:
@@ -234,7 +234,7 @@ func runTreeExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) (e
 				for j := gift.Bgn; j <= gift.End; j = j + gift.Inc {
 					v := fmt.Sprintf(gift.Fmt, j)
 					vals = append(vals, v)
-					logDebug("FOR SEQ on Arg=%d, exe=%d, seq=%s", arg.Head, exe.Seg.Head, v)
+					LogDebug("FOR SEQ on Arg=%d, exe=%d, seq=%s", arg.Head, exe.Seg.Head, v)
 				}
 			case CmndTbl:
 				tblKey := arg.Hold + magicDatabaseSrcTable
@@ -251,7 +251,7 @@ func runTreeExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) (e
 				for _, v := range tbls.([]string) {
 					if matchEntire(reg, v) {
 						vals = append(vals, v)
-						logDebug("FOR TBL on Arg=%d, exe=%d, table=%s", arg.Head, exe.Seg.Head, v)
+						LogDebug("FOR TBL on Arg=%d, exe=%d, table=%s", arg.Head, exe.Seg.Head, v)
 					}
 				}
 			default:
@@ -265,7 +265,7 @@ func runTreeExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) (e
 				cnt ++
 				LogTrace("FOR %s on Arg=%d, exe=%d, value=%s", arg.Type, arg.Head, exe.Seg.Head, v)
 				para.valctx[arg.Hold] = v
-				err = runOnceExe(exe, src, dst, para, lvl)
+				err = treeOneExe(exe, src, dst, para, lvl)
 				if err != nil {
 					return
 				}
@@ -289,15 +289,15 @@ func runTreeExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) (e
 			}
 		}
 	} else {
-		err = runOnceExe(exe, src, dst, para, lvl)
+		err = treeOneExe(exe, src, dst, para, lvl)
 	}
 
 	return
 }
 
-func runOnceExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) error {
+func treeOneExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) error {
 	// 构造执行语句
-	stmt, prnt, vals, err := buildStatement(exe, para.valctx, src)
+	stmt, prnt, vals, err := buildTreeStmt(exe, para.valctx, src)
 	if err != nil {
 		return err
 	}
@@ -329,7 +329,7 @@ func runOnceExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) er
 		}
 	}()
 
-	logDebug("take stmt, id=%d, lvl=%d line=%s, stmt=%q", head, lvl, line, stmt)
+	LogDebug("take stmt, id=%d, lvl=%d line=%s, stmt=%q", head, lvl, line, stmt)
 	if len(exe.Refs) > 0 { // 有结果集提取，不支持OUT
 		rowFunc := func(row *sql.Rows) error {
 			cols, er := row.ColumnTypes()
@@ -365,12 +365,12 @@ func runOnceExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) er
 								if sub[1] == "COL" {
 									cln := cols[j].Name()
 									para.valctx[hld] = cln
-									logDebug("simple sys DEF, hold=%s, para=%s, col-name=%s", hld, ptn, cln)
+									LogDebug("simple sys DEF, hold=%s, para=%s, col-name=%s", hld, ptn, cln)
 								} else { // VAL
 									para.valctx[hld] = vals[j]
 									dbt := cols[j].DatabaseTypeName()
 									para.valctx[hld+magicDatabaseTypeName] = dbt
-									logDebug("simple sys DEF, hold=%s, para=%s, value=%#v, dbtype=%s", hld, ptn, vals[j], dbt)
+									LogDebug("simple sys DEF, hold=%s, para=%s, value=%#v, dbtype=%s", hld, ptn, vals[j], dbt)
 								}
 							} else {
 								pld := fmt.Sprintf("%s:%s:%d", hld, magicA9, k) // 保证多值的不能直接找到
@@ -380,7 +380,7 @@ func runOnceExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) er
 										cls[i] = c.Name()
 									}
 									para.valctx[pld] = cls
-									logDebug("simple sys DEF, hold=%s, para=%s, values'count=%d", pld, ptn, len(cls))
+									LogDebug("simple sys DEF, hold=%s, para=%s, values'count=%d", pld, ptn, len(cls))
 								} else {
 									dbt := make([]string, ln)
 									for i, c := range cols {
@@ -388,7 +388,7 @@ func runOnceExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) er
 									}
 									para.valctx[pld] = vals
 									para.valctx[pld+magicDatabaseTypeName] = dbt
-									logDebug("simple sys DEF, hold=%s, para=%s, value'count=%d", pld, ptn, len(dbt))
+									LogDebug("simple sys DEF, hold=%s, para=%s, value'count=%d", pld, ptn, len(dbt))
 								}
 							}
 						}
@@ -403,7 +403,7 @@ func runOnceExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) er
 							dbt := cols[i].DatabaseTypeName()
 							para.valctx[hld+magicDatabaseTypeName] = dbt
 							ltr, _ := src.Literal(vals[i], dbt)
-							logDebug("simple usr DEF, hold=%s, para=%s, value=%s", hld, ptn, ltr)
+							LogDebug("simple usr DEF, hold=%s, para=%s, value=%s", hld, ptn, ltr)
 							lost = false
 							break
 						}
@@ -449,7 +449,7 @@ func runOnceExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) er
 		dcnt := len(dst)
 		if para.agreed {
 			if rsrc {
-				logDebug("running on SRC db=%s", dbsName)
+				LogDebug("running on SRC db=%s", dbsName)
 				if a, e := src.Exec(stmt, vals...); e != nil {
 					LogError("failed on SRC=%s, id=%d, lvl=%d err=%v", dbsName, head, lvl, e)
 					return e
@@ -464,10 +464,10 @@ func runOnceExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) er
 					dboName := db.DbName()
 					otmt := strings.Replace(stmt, magicDo, dboName, -1);
 					for _, d := range valOnv {
-						logDebug("replace out-db at %d with %s", d, dboName)
+						LogDebug("replace out-db at %d with %s", d, dboName)
 						vals[d] = dboName
 					}
-					logDebug("running on OUT[%d/%d] db=%s, stmt=%q", i+1, dcnt, dboName, otmt)
+					LogDebug("running on OUT[%d/%d] db=%s, stmt=%q", i+1, dcnt, dboName, otmt)
 					if a, e := db.Exec(otmt, vals...); e != nil {
 						LogError("failed on [%d/%d]OUT=%s, id=%d, lvl=%d, err=%v", i+1, dcnt, dboName, head, lvl, e)
 						return e
@@ -498,7 +498,7 @@ func runOnceExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) er
 		}
 	}
 
-	logDebug("done stmt, id=%d, lvl=%d, line=%s\n", head, lvl, line)
+	LogDebug("done stmt, id=%d, lvl=%d, line=%s\n", head, lvl, line)
 	return nil
 }
 
@@ -608,17 +608,17 @@ func shouldEndAct(exe *Exe, cnt int) bool {
 	return end
 }
 
-func buildStatement(exe *Exe, ctx map[string]interface{}, src *MyConn) (stmt, prnt string, vals []interface{}, err error) {
+func buildTreeStmt(exe *Exe, ctx map[string]interface{}, src *MyConn) (stmt, prnt string, vals []interface{}, err error) {
 	stmt = exe.Seg.Text
 	prnt = stmt
 
 	if hlen := len(exe.Deps); hlen > 0 {
-		logDebug("building line=%s,stmt=%#v", exe.Seg.Line, stmt)
+		LogDebug("building line=%s,stmt=%#v", exe.Seg.Line, stmt)
 		vals = make([]interface{}, 0, hlen)
 		var rtn, std strings.Builder // return,stdout
 		off := 0
 		for _, dep := range exe.Deps {
-			logDebug("parsing dep=%s", dep)
+			LogDebug("parsing dep=%s", dep)
 
 			if dep.Off > off {
 				tmp := stmt[off:dep.Off]
@@ -646,11 +646,11 @@ func buildStatement(exe *Exe, ctx map[string]interface{}, src *MyConn) (stmt, pr
 					} else {
 						std.WriteString(v)
 					}
-					logDebug("dynamic replace hold=%s, with quote=%t, value=%s", hld, b, v)
+					LogDebug("dynamic replace hold=%s, with quote=%t, value=%s", hld, b, v)
 				} else {
 					rtn.WriteString(v)
 					std.WriteString(v)
-					logDebug("static simple replace hold=%s, with value=%s", hld, v)
+					LogDebug("static simple replace hold=%s, with value=%s", hld, v)
 				}
 			} else { // 多值或模式
 				ptn := dep.Arg.Para
@@ -702,10 +702,10 @@ func buildStatement(exe *Exe, ctx map[string]interface{}, src *MyConn) (stmt, pr
 					if len(jner) == 0 {
 						if spt := ptn[sub[4]:sub[5]]; len(spt) > 0 {
 							jner = spt
-							logDebug("use joiner=%s. hold=%s, index=%d", jner, hld, k)
+							LogDebug("use joiner=%q. hold=%s, index=%d", jner, hld, k)
 						} else if k == mtln-1 {
 							jner = ","
-							logDebug("user default joiner=%s", jner)
+							LogDebug("user default joiner=%q", jner)
 						}
 					}
 
@@ -737,20 +737,20 @@ func buildStatement(exe *Exe, ctx map[string]interface{}, src *MyConn) (stmt, pr
 
 					if ptn[sub[2]:sub[3]] == "COL" {
 						mval = append(mval, hv, EmptyArr)
-						logDebug("get %d COL values. hold=%s, para=%s", k, hld, ptn)
+						LogDebug("get %d COL values. hold=%s, para=%q", k, hld, ptn)
 					} else {
 						dv, dk := ctx[pld+magicDatabaseTypeName]
 						if !dk {
-							err = errorAndLog("failed to get %d hold's type. hold=%s, para=%s", k, hld, ptn)
+							err = errorAndLog("failed to get %d hold's type. hold=%s, para=%q", k, hld, ptn)
 							return
 						}
 						mval = append(mval, dv, hv)
-						logDebug("get %d VAL values. hold=%s, para=%s", len(dv.([]string)), hld, ptn)
+						LogDebug("get %d VAL values. hold=%s, para=%q", len(dv.([]string)), hld, ptn)
 					}
 				}
 
 				// 处理数据
-				logDebug("deal pattern STR with %d items", itct)
+				LogDebug("deal pattern STR with %d items", itct)
 				for k := 0; k < itct; k++ {
 					if k > 0 {
 						rtn.WriteString(jner)
@@ -814,8 +814,8 @@ func childFor(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl, cnt int)
 		if !shouldForAct(son, cnt) {
 			continue
 		}
-		logDebug("fork ONE/FOR child=%d, parent=%d, lvl=%d", son.Seg.Head, head, lvl+1)
-		err = runTreeExe(son, src, dst, para, lvl+1)
+		LogDebug("fork ONE/FOR child=%d, parent=%d, lvl=%d", son.Seg.Head, head, lvl+1)
+		err = treeRunExe(son, src, dst, para, lvl+1)
 		if err != nil {
 			return
 		}
@@ -841,8 +841,8 @@ func childEnd(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl, cnt int)
 		if !shouldEndAct(son, cnt) {
 			continue
 		}
-		logDebug("fork END child=%d, parent=%d, lvl=%d", son.Seg.Head, head, lvl+1)
-		err = runTreeExe(son, src, dst, para, lvl+1)
+		LogDebug("fork END child=%d, parent=%d, lvl=%d", son.Seg.Head, head, lvl+1)
+		err = treeRunExe(son, src, dst, para, lvl+1)
 		if err != nil {
 			return
 		}
