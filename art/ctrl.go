@@ -191,7 +191,7 @@ func (room *Room) delJob(user string, id int64) {
 		LogTrace("killed all jobs, user=%s", user)
 		room.echo <- fmt.Sprintf("killed all jobs, user=%s", user)
 	} else {
-		room.jobs.Delete(id);
+		room.jobs.Delete(id)
 		LogTrace("job id=%d killed by user=%s", id, user)
 		room.echo <- fmt.Sprintf("job id=%d killed by user=%s", id, user)
 	}
@@ -235,8 +235,8 @@ func (room *Room) gogoConn(conn net.Conn) {
 
 	// command
 	for ln, err := reader.ReadString('\n'); err == nil; ln, err = reader.ReadString('\n') {
-		ln = strings.Replace(ln, "\t", " ", -1);
-		ln = strings.TrimSpace(ln);
+		ln = strings.Replace(ln, "\t", " ", -1)
+		ln = strings.TrimSpace(ln)
 		switch part := strings.SplitN(ln, " ", 2); part[0] {
 		case "":
 			continue
@@ -251,7 +251,7 @@ func (room *Room) gogoConn(conn net.Conn) {
 			if len(part) > 1 {
 				id, er := strconv.ParseInt(part[1], 10, 64)
 				if er != nil {
-					conn.Write([]byte(fmt.Sprintf("bad job id %s, err=%s", ln, er.Error())));
+					conn.Write([]byte(fmt.Sprintf("bad job id %s, err=%s", ln, er.Error())))
 					continue
 				}
 				jbid = int64(id)
@@ -525,7 +525,7 @@ func askInfo(ntw string) string {
 			break
 		}
 
-		line = strings.TrimSpace(line);
+		line = strings.TrimSpace(line)
 		if len(line) == 0 {
 			continue
 		}

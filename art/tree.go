@@ -77,7 +77,7 @@ func stmtEnv(v string, src *MyConn, tmp map[string]string) (rst string, has bool
 			return
 		}
 
-		qc := countQuotePair(ptn[2]);
+		qc := countQuotePair(ptn[2])
 		if qc != int(cnt) {
 			return
 		}
@@ -143,7 +143,7 @@ func TreeRunSqlx(pref *Preference, sqlx *SqlExe, src *MyConn, dst []*MyConn, ris
 
 	tmp := make(map[string]string)
 	for k, v := range sqlx.Envs {
-		r, h, e := stmtEnv(v, src, tmp);
+		r, h, e := stmtEnv(v, src, tmp)
 		if e != nil {
 			return e
 		}
@@ -255,7 +255,7 @@ func treeRunExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) (e
 					}
 				}
 			default:
-				return errorAndLog("unsupported FOR arg=%s", arg);
+				return errorAndLog("unsupported FOR arg=%s", arg)
 			}
 
 			// 遍历子树, ONE,FOR,END
@@ -462,7 +462,7 @@ func treeOneExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) er
 			if rout {
 				for i, db := range dst {
 					dboName := db.DbName()
-					otmt := strings.Replace(stmt, magicDo, dboName, -1);
+					otmt := strings.Replace(stmt, magicDo, dboName, -1)
 					for _, d := range valOnv {
 						LogDebug("replace out-db at %d with %s", d, dboName)
 						vals[d] = dboName

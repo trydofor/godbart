@@ -489,7 +489,7 @@ func makeDiffAll(con *MyConn, tbl []string, dtl map[string]DiffItem, trg bool) e
 			}
 			if ln := len(ixm); ln > 0 {
 				ixa = make([]string, 0, ln)
-				for k, _ := range ixm {
+				for k := range ixm {
 					ixa = append(ixa, k)
 				}
 				sort.Strings(ixa)
@@ -504,7 +504,7 @@ func makeDiffAll(con *MyConn, tbl []string, dtl map[string]DiffItem, trg bool) e
 				}
 				if ln := len(tgm); ln > 0 {
 					tga = make([]string, 0, ln)
-					for k, _ := range tgm {
+					for k := range tgm {
 						tga = append(tga, k)
 					}
 					sort.Strings(tga)
@@ -552,7 +552,7 @@ func showCreate(pref *Preference, conn *MyConn, rgx []*regexp.Regexp) {
 		} else {
 			if cnt := len(tgs); cnt > 0 {
 				tns := make([]string, 0, cnt)
-				for k, _ := range tgs {
+				for k := range tgs {
 					tns = append(tns, k)
 				}
 				sort.Strings(tns)

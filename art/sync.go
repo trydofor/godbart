@@ -23,7 +23,7 @@ func Sync(srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regex
 	var name, ddls []string
 
 	// 获得所有表
-	tbls, err := listTable(scon, rgx);
+	tbls, err := listTable(scon, rgx)
 	if err != nil {
 		return err
 	}

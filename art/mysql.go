@@ -399,9 +399,9 @@ func (m *MyConn) Quotesc(str, qto string) string {
 		case '\r':
 			buf.WriteByte('\\')
 			buf.WriteByte('r')
-		case '\x1a':
-			buf.WriteByte('\\')
-			buf.WriteByte('Z')
+			//case '\x1a':
+			//	buf.WriteByte('\\')
+			//	buf.WriteByte('Z')
 		case '\'':
 			buf.WriteByte('\\')
 			buf.WriteByte('\'')

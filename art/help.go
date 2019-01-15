@@ -262,7 +262,7 @@ func pureRunExes(exes []*Exe, ctx map[string]interface{}, db *MyConn, fn func(ex
 						}
 					}
 				default:
-					return errorAndLog("unsupported FOR arg=%s", arg);
+					return errorAndLog("unsupported FOR arg=%s", arg)
 				}
 
 				for _, v := range vals {

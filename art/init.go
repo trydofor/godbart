@@ -40,6 +40,6 @@ var (
 	MsgLevel = LvlDebug
 	DiffType = []string{DiffTbl, DiffAll, DiffCol, DiffDdl}
 	SyncType = []string{SyncTbl, SyncAll, SyncTrg, SyncRow}
-	EmptyArr = []interface{}{}
+	EmptyArr = make([]interface{}, 0)
 	CtrlRoom = &Room{}
 )
