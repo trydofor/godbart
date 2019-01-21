@@ -439,7 +439,12 @@ func treeOneExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) er
 		//
 		er := src.Query(rowFunc, stmt, vals...)
 		if er != nil {
-			return er
+			if src.TableNotFound(er) {
+				LogTrace("Table not exist, db=%s use sql=%s", src.DbName(), stmt)
+			} else {
+				LogError("failed to query, stmt=%s", stmt)
+				return er
+			}
 		}
 	} else { // 直接执行的，不会产生子树
 		if lvl == 1 {
@@ -498,7 +503,7 @@ func treeOneExe(exe *Exe, src *MyConn, dst []*MyConn, para *exeStat, lvl int) er
 		}
 	}
 
-	LogDebug("done stmt, id=%d, lvl=%d, line=%s\n", head, lvl, line)
+	LogDebug("done stmt, id=%d, lvl=%d, line=%s", head, lvl, line)
 	return nil
 }
 

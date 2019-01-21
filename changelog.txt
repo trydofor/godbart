@@ -1,3 +1,10 @@
+v0.9.8
+增加`show`命令，提供ddl功能
+把`ddl`功能，从`diff`挪到`show`
+在配置中增加sql模板
+Conn接口增加TableNotFound方法
+manual.sh脚本增加日志检查
+
 v0.9.7
 增加`SEQ|TBL`指令，以支持分表的操作。
 增加sqlx解析的后置检查。

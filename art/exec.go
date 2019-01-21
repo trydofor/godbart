@@ -34,7 +34,7 @@ func Exec(pref *Preference, dest []*DataSource, file []FileEntity, risk bool) er
 	for i, v := range dest {
 		con, er := openDbAndLog(v)
 		if er != nil {
-			return errorAndLog("failed to open db=%s, err=%#v", v.Code, er)
+			return errorAndLog("failed to open db=%s, err=%v", v.Code, er)
 		}
 		conn[i] = con
 		wg.Add(1)

@@ -173,11 +173,11 @@ func ParseSqlx(sqls []Sql, envs map[string]string) (*SqlExe, error) {
 									envx[gx.Hold] = fmt.Sprintf("%s%s%d%s%s", magicA9, magicJ7, qc, magicJ7, gx.Para)
 									LogDebug("got runtime ENV, Arg's line=%d, para=%s", gx.Head, gx.Para)
 								} else {
-									if rule == EnvRuleError {
-										return nil, errorAndLog("ENV not found. para=%s, line=%d, file=%s", gx.Para, gx.Head, seg.File)
-									} else {
+									if rule == EnvRuleEmpty {
 										envx[gx.Hold] = ""
 										LogDebug("checked def ENV, set Empty, Arg's line=%d, para=%s", gx.Head, gx.Para)
+									} else {
+										return nil, errorAndLog("ENV not found. para=%s, line=%d, file=%s", gx.Para, gx.Head, seg.File)
 									}
 								}
 							}
@@ -197,7 +197,7 @@ func ParseSqlx(sqls []Sql, envs map[string]string) (*SqlExe, error) {
 							for i, v := range sp {
 								ip, er := strconv.ParseInt(strings.TrimSpace(v), 10, 32)
 								if er != nil {
-									return nil, errorAndLog("Bad format of SEQ, failed to parse int. arg=%s, file=%s, err=%#v", gx, seg.File, er)
+									return nil, errorAndLog("Bad format of SEQ, failed to parse int. arg=%s, file=%s, err=%v", gx, seg.File, er)
 								}
 								it[i] = int(ip)
 							}
@@ -214,7 +214,7 @@ func ParseSqlx(sqls []Sql, envs map[string]string) (*SqlExe, error) {
 						case CmndTbl:
 							reg, er := regexp.Compile(gx.Para)
 							if er != nil {
-								return nil, errorAndLog("Bad format of TBL, failed to compile regexp. arg=%s, file=%s, err=%#v", gx, seg.File, er)
+								return nil, errorAndLog("Bad format of TBL, failed to compile regexp. arg=%s, file=%s, err=%v", gx, seg.File, er)
 							}
 							gx.Gift = reg
 							holdExe[gx.Hold] = exe
@@ -265,11 +265,11 @@ func ParseSqlx(sqls []Sql, envs map[string]string) (*SqlExe, error) {
 											envx[gx.Hold] = envx[rg.Hold]
 											LogDebug("checked STR redefine runtime ENV, Arg's line=%d, para=%s", gx.Head, gx.Para)
 										} else {
-											if rule == EnvRuleError {
-												return nil, errorAndLog("STR redefine ENV not found. para=%s, line=%d, file=%s", gx.Para, gx.Head, seg.File)
-											} else {
+											if rule == EnvRuleEmpty {
 												envx[gx.Hold] = ""
 												LogDebug("checked STR redefine ENV, set Empty, Arg's line=%d, para=%s", gx.Head, gx.Para)
+											} else {
+												return nil, errorAndLog("STR redefine ENV not found. para=%s, line=%d, file=%s", gx.Para, gx.Head, seg.File)
 											}
 										}
 									}

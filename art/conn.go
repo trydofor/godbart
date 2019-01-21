@@ -49,9 +49,9 @@ type Conn interface {
 	// 获得表的所有触发器
 	Triggers(table string) (tgs map[string]Trg, err error)
 
-	// 生产建表SQL（含索引），包含结束符
+	// 生产建表SQL（含索引），格式化的
 	DdlTable(table string) (ddl string, err error)
-	// 生产建触发器SQL，包含结束符
+	// 生产建触发器SQL，格式化的
 	DdlTrigger(trigger string) (ddl string, err error)
 
 	// 转成SQL字面量，set x=val的 val部分字面量，是否需要引号扩上
@@ -61,4 +61,6 @@ type Conn interface {
 	Nothing(val interface{}) bool
 	// 转义的字符串
 	Quotesc(str, qto string) string
+
+	TableNotFound(err error) bool
 }

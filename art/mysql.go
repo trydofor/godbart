@@ -418,3 +418,11 @@ func (m *MyConn) Quotesc(str, qto string) string {
 	buf.WriteString(qto)
 	return buf.String()
 }
+
+func (m *MyConn) TableNotFound(err error) bool {
+	msg := err.Error()
+	if strings.Contains(msg, "1146") || strings.Contains(msg, "doesn't exist") {
+		return true
+	}
+	return false
+}

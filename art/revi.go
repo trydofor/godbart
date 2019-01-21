@@ -21,14 +21,21 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi, mask, r
 		return err
 	}
 
+	if len(revi) == 0 || !mreg.MatchString(revi) {
+		LogFatal("must assign revi number and match the mast")
+		return err
+	}
+
 	var reviSegs []ReviSeg
+	var reviSlt string
+	var tknQry ,tknSlt, tknUdp string
+
 	reviFind, reviCurr := false, ""
-	var reviSlt, reviUdp string
 
 	if len(rqry) == 0 {
 		rqry = "SELECT"
 	}
-	rlen := len(rqry)
+	tknQry = strings.ToLower(removeWhite(rqry))
 
 	// 倒序分版本块
 	envs := make(map[string]string)
@@ -38,77 +45,82 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi, mask, r
 		sqls := ParseSqls(pref, &f)
 
 		// 按版本分段
-		numRevi, idxRevi := "", len(sqls)-1
-		reviSplit := func(i int) {
+		idxRevi := len(sqls)-1
+		reviSplit := func(i int, sqlRevi string) error {
 			v := sqls[i]
 			// find and check SELECT REVI
 			for j := i; j < idxRevi; j++ {
 
 				if w := sqls[j]; w.Exeb {
+					tkn := strings.ToLower(removeWhite(w.Text))
 
-					stm := w.Text
-					if len(stm) < rlen || !strings.EqualFold(rqry, stm[0:rlen]) {
+					if !strings.HasPrefix(tkn, tknQry) {
 						continue
 					}
 
 					if len(reviSlt) == 0 {
-						reviSlt = stm
-						LogTrace("find SLT-REVI-SQL, file=%s, line=%s, sql=%s", w.File, w.Line, stm)
+						reviSlt = w.Text
+						tknSlt = tkn
+						LogTrace("find SLT-REVI-SQL, line=%s, file=%s, sql=%s", w.Line, w.File, w.Text)
 					} else {
-						if reviSlt != stm {
-							err = errorAndLog("SLT-REVI-SQL changed, file=%s, line=%s, sql=%s", w.File, w.Line, stm)
-							return
+						if tknSlt != tkn {
+							return errorAndLog("SLT-REVI-SQL changed, first-sql=%s, file=%s, line=%s, now-		sql=%s", reviSlt, w.File, w.Line, w.Text)
 						}
 					}
 					break
 				}
 			}
 
-			if strings.Compare(numRevi, revi) > 0 {
-				LogTrace("IGNORE bigger revi=%s, file=%s, line=%s", numRevi, v.File, v.Line)
+			if strings.Compare(sqlRevi, revi) > 0 {
+				LogTrace("IGNORE bigger revi=%s, line=%s, file=%s", sqlRevi, v.Line, v.File)
 			} else {
-				exe, err := ParseSqlx(sqls[i+1:idxRevi+1], envs)
-				if err != nil {
-					return
+				LogTrace("build revi=%s, line from=%d, to=%d, file=%s", sqlRevi, sqls[i+1].Head, sqls[idxRevi].Head, v.File)
+				exe, er := ParseSqlx(sqls[i+1:idxRevi+1], envs)
+				if er != nil {
+					return er
 				}
-				reviSegs = append(reviSegs, ReviSeg{numRevi, exe.Exes})
-				LogTrace("ADD candidate revi=%s, file=%s, line=%s", numRevi, v.File, v.Line)
+				reviSegs = append(reviSegs, ReviSeg{sqlRevi, exe.Exes})
+				LogTrace("ADD candidate revi=%s, line=%s, file=%s", sqlRevi, v.Line, v.File)
 			}
+			return nil
 		}
 
+		numRevi := ""
 		for i := idxRevi; i >= 0; i-- {
 			v := sqls[i]
 			if v.Exeb {
 				stm := v.Text
-				r := findUpdRevi(stm, reviUdp, mreg)
+				r := findUpdRevi(stm, tknUdp, mreg)
 
-				if len(reviUdp) == 0 { // first
+				if len(tknUdp) == 0 { // first
 					if len(r) == 0 {
-						return errorAndLog("REVI not matches in the last sql. file=%s, line=%s, sql=%s", v.File, v.Line, stm)
+						return errorAndLog("REVI not matches in the last sql. line=%s, file=%s, sql=%s", v.Line, v.File, stm)
 					}
-					LogTrace("find UPD-REVI-SQL, revi=%s, file=%s, line=%s, sql=%s", r, v.File, v.Line, stm)
+					LogTrace("find UPD-REVI-SQL, revi=%s, line=%s, file=%s, sql=%s", r, v.Line, v.File, stm)
 					p := strings.Index(stm, r)
-					reviUdp = strings.ToLower(removeWhite(stm[0:p]))
+					tknUdp = strings.ToLower(removeWhite(stm[0:p]))
 				}
 
 				if len(r) > 0 {
-					LogTrace("find more revi=%s, file=%s, line=%s", r, v.File, v.Line)
+					LogTrace("find more revi=%s, line=%sfile=%s, ", r, v.Line, v.File)
 
 					if len(reviCurr) == 0 {
 						reviCurr = r
 					} else {
 						if strings.Compare(reviCurr, r) <= 0 {
-							return errorAndLog("need uniq&asc revi, but %s <= %s. file=%s, line=%s, sql=%s", reviCurr, r, v.File, v.Line, stm)
+							return errorAndLog("need uniq&asc revi, but %s <= %s. line=%s, file=%s, sql=%s", reviCurr, r, v.Line, v.File, stm)
 						}
 					}
 
 					if revi == r {
-						LogTrace("find DONE revi=%s, file=%s, line=%s", r, v.File, v.Line)
+						LogTrace("find DONE revi=%s, line=%s, file=%s", r, v.Line, v.File)
 						reviFind = true
 					}
 
 					if i < idxRevi {
-						reviSplit(i)
+						if er := reviSplit(i, r);er != nil {
+							return er
+						}
 					}
 
 					idxRevi = i
@@ -117,7 +129,9 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi, mask, r
 			}
 
 			if i == 0 {
-				reviSplit(i)
+				if er := reviSplit(i, numRevi); er != nil {
+					return er
+				}
 			}
 		}
 	}
@@ -148,7 +162,7 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi, mask, r
 	for i, v := range dest {
 		con, er := openDbAndLog(v)
 		if er != nil {
-			return errorAndLog("failed to open db=%s, err=%#v", v.Code, er)
+			return errorAndLog("failed to open db=%s, err=%v", v.Code, er)
 		}
 		conn[i] = con
 		wg.Add(1)
@@ -210,10 +224,10 @@ func ReviEach(pref *Preference, revs []ReviSeg, conn *MyConn, slt string, mask *
 
 	err := conn.Query(slv, slt)
 	if err != nil {
-		if strings.Contains(err.Error(), "exist") {
+		if conn.TableNotFound(err) {
 			LogTrace("Table not exist, db=%s use sql=%s", dbn, slt)
 		} else {
-			LogError("failed to select revision on db=%s use sql=%s, err=%v", dbn, slt, err)
+			LogError("failed to select revision on db=%s use sql=%s, err=v", dbn, slt, err)
 			return
 		}
 	}
@@ -239,19 +253,25 @@ func ReviEach(pref *Preference, revs []ReviSeg, conn *MyConn, slt string, mask *
 	cmn, dlt := pref.LineComment, pref.DelimiterRaw
 	for _, s := range revs {
 
-		pcnt := 0
-		walkExes(s.exes, func(exe *Exe) error {
-			pcnt++
-			return nil
-		})
-
+		pnt := 0
 		if len(revi) > 0 && strings.Compare(s.revi, revi) <= 0 {
-			lft = lft - pcnt
-			LogTrace("ignore smaller. db=%s, revi=%s, db-revi=%s, sqls=[%d,%d]/%d", dbn, s.revi, revi, lft, lft+pcnt, cnt)
+			walkExes(s.exes, func(exe *Exe) error {
+				delete(sts, fmt.Sprintf("%s:%d", exe.Seg.File, exe.Seg.Head))
+				pnt++
+				return nil
+			})
+
+			LogTrace("ignore smaller. db=%s, revi=%s, db-revi=%s, sqls=[%d,%d]/%d", dbn, s.revi, revi, cnt-lft+1, cnt-lft+pnt, cnt)
+			lft = lft - pnt
 			continue
+		}else{
+			walkExes(s.exes, func(exe *Exe) error {
+				pnt++
+				return nil
+			})
 		}
 
-		LogTrace("db=%s, revi=%s, sqls=%d", dbn, s.revi, pcnt)
+		LogTrace("db=%s, revi=%s, sqls count=%d", dbn, s.revi, pnt)
 		pureRunExes(s.exes, ctx, conn, func(exe *Exe, stm string) error {
 			v := exe.Seg
 			delete(sts, fmt.Sprintf("%s:%d", v.File, v.Head))
@@ -259,7 +279,7 @@ func ReviEach(pref *Preference, revs []ReviSeg, conn *MyConn, slt string, mask *
 			if risk {
 				a, err := conn.Exec(stm)
 				if err != nil {
-					LogError("db=%s, %d/%d, failed to revi sql, revi=%s, file=%s, line=%s, err=%v", dbn, cnt-lft, cnt, s.revi, v.File, v.Line, err)
+					LogError("db=%s, %d/%d, failed to revi sql, revi=%s, file=%s, line=%s, err=v", dbn, cnt-lft, cnt, s.revi, v.File, v.Line, err)
 					return err
 				} else {
 					LogTrace("db=%s, %d/%d, %d affects. revi=%s, file=%s, line=%s", dbn, cnt-lft, cnt, a, s.revi, v.File, v.Line)
@@ -279,6 +299,6 @@ func ReviEach(pref *Preference, revs []ReviSeg, conn *MyConn, slt string, mask *
 	if lft == 0 {
 		LogTrace("db=%s, exes=%d, all done", dbn, cnt)
 	} else {
-		LogTrace("db=%s, %d/%d", dbn, cnt-lft, cnt)
+		LogTrace("db=%s, %d/%d, in progress", dbn, cnt-lft, cnt)
 	}
 }

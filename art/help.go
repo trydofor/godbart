@@ -96,15 +96,9 @@ func BuiltinEnvs(envs map[string]string) {
 	}
 
 	if rl, ok := envs[EnvRule]; !ok {
-		envs[EnvRule] = EnvRuleError
-		LogTrace("put builtin env, k=%s, v=%q", EnvRule, EnvRuleError)
+		LogTrace("builtin env, k=%s not found", EnvRule)
 	} else {
-		switch rl {
-		case EnvRuleEmpty, EnvRuleError:
-			LogTrace("use builtin env, k=%s, v=%q", EnvRule, rl)
-		default:
-			ExitIfTrue(true, -4, "unsupport env, key=%s, value=%s", EnvRule, rl)
-		}
+		LogTrace("use builtin env, k=%s, v=%q", EnvRule, rl)
 	}
 
 	envs[EnvSrcDb] = "UN-SET"

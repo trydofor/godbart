@@ -39,9 +39,8 @@ CREATE TABLE `tx_parcel` (
   UNIQUE KEY `uq_trknum` (`track_num`),
   KEY `ix_user_id` (`user_id`),
   KEY `ix_recver_id` (`recver_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT COMMENT='包裹';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=COMPACT COMMENT='包裹';
 
--- db=godbart_dev_main, trigger=tx_parcel$log$bd, table=tx_parcel
 DROP TRIGGER IF EXISTS `tx_parcel$log$bd` ;
 DELIMITER $$
 CREATE TRIGGER `tx_parcel$log$bd` BEFORE DELETE ON `tx_parcel`
@@ -50,7 +49,6 @@ insert into `tx_parcel$log` select *, null, 2, now() from `tx_parcel` where id= 
 END $$
 DELIMITER ;
 
--- db=godbart_dev_main, trigger=tx_parcel$log$bu, table=tx_parcel
 DROP TRIGGER IF EXISTS `tx_parcel$log$bu` ;
 DELIMITER $$
 CREATE TRIGGER `tx_parcel$log$bu` BEFORE UPDATE ON `tx_parcel`
@@ -71,7 +69,7 @@ CREATE TABLE `tx_parcel$log` (
   `warehouse` int(11) DEFAULT NULL COMMENT '数据所在仓库 WareHouse',
   `sender_id` bigint(20) DEFAULT NULL COMMENT '发件人ID',
   `recver_id` bigint(20) DEFAULT NULL COMMENT '收件人ID',
-  `track_num` varchar(50) CHARACTER SET utf8 NOT NULL COMMENT '运单号',
+  `track_num` varchar(50) NOT NULL COMMENT '运单号',
   `weight_pkg` decimal(10,2) DEFAULT NULL COMMENT '商家包裹总重量（a+b+m）',
   `weight_dim` decimal(10,2) DEFAULT NULL COMMENT '商家体积重',
   `input_time` datetime DEFAULT NULL COMMENT '录单时间',
@@ -102,7 +100,7 @@ CREATE TABLE `tx_parcel_event` (
   PRIMARY KEY (`id`),
   KEY `ix_user_id` (`user_id`),
   KEY `ix_parcel_id` (`parcel_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT COMMENT='包裹事件';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=COMPACT COMMENT='包裹事件';
 
 -- db=godbart_dev_main, 6/7, table=tx_receiver
 DROP TABLE IF EXISTS `tx_receiver`;
@@ -129,7 +127,7 @@ CREATE TABLE `tx_receiver` (
   KEY `ix_addr` (`province`,`city`,`district`,`address1`),
   KEY `ix_hash` (`hash`),
   FULLTEXT KEY `ft_phone` (`phone`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT COMMENT='收件人';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=COMPACT COMMENT='收件人';
 
 -- db=godbart_dev_main, 7/7, table=tx_track
 DROP TABLE IF EXISTS `tx_track`;
@@ -150,4 +148,4 @@ CREATE TABLE `tx_track` (
   UNIQUE KEY `uq_trknum` (`track_num`),
   KEY `ix_user_id` (`user_id`),
   KEY `ix_parcel_id` (`parcel_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT COMMENT='物流跟踪';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=COMPACT COMMENT='物流跟踪';

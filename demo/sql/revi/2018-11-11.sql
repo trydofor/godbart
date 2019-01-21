@@ -43,7 +43,7 @@ CREATE TABLE `tx_parcel` (
   `leave_time` datetime DEFAULT NULL COMMENT '最新出库时间',
   `track_time` datetime DEFAULT NULL COMMENT '首个国内物流时间',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT COMMENT='包裹';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=COMPACT COMMENT='包裹';
 
 DROP TABLE IF EXISTS  `tx_track`;
 CREATE TABLE `tx_track` (
@@ -60,7 +60,7 @@ CREATE TABLE `tx_track` (
   `status` int(11) NOT NULL COMMENT '物流状态',
   `dest_city` varchar(50) DEFAULT NULL COMMENT '包裹目的地城市',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT COMMENT='物流跟踪';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=COMPACT COMMENT='物流跟踪';
 
 DROP TABLE IF EXISTS  `tx_parcel_event`;
 CREATE TABLE `tx_parcel_event` (
@@ -76,7 +76,7 @@ CREATE TABLE `tx_parcel_event` (
   `operator_id` bigint(20) DEFAULT NULL COMMENT '操作员ID',
   `is_closed` tinyint(1) DEFAULT NULL COMMENT '是否关闭:true=1,false=0',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT COMMENT='包裹事件';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=COMPACT COMMENT='包裹事件';
 
 DROP TABLE IF EXISTS  `tx_receiver`;
 CREATE TABLE `tx_receiver` (
@@ -97,6 +97,6 @@ CREATE TABLE `tx_receiver` (
   `address2` varchar(100) DEFAULT NULL COMMENT '楼/室',
   `hash` varchar(40) NOT NULL COMMENT '姓名，电话，省市区地址1，2的hash',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT COMMENT='收件人';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=COMPACT COMMENT='收件人';
 
 REPLACE INTO sys_schema_version (version, created) VALUES( 2018111103, NOW());

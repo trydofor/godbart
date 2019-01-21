@@ -2,6 +2,7 @@ package art
 
 import (
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -62,4 +63,20 @@ func fmtTime(t time.Time, f string) string {
 	} else {
 		return t.Format(f)
 	}
+}
+
+func onlyKeyChar(str string) string {
+	var sb strings.Builder
+	for _, c := range str {
+		if c >= '0' && c <= '9' {
+			sb.WriteRune(c)
+		} else if c >= 'A' && c <= 'Z' {
+			sb.WriteRune(c)
+		} else if c >= 'a' && c <= 'z' {
+			sb.WriteRune(c)
+		} else if c == '_' || c == '$' {
+			sb.WriteRune(c)
+		}
+	}
+	return sb.String()
 }

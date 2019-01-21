@@ -17,7 +17,7 @@ CREATE TABLE `tx_parcel` (
   `leave_time` datetime DEFAULT NULL COMMENT '最新出库时间',
   `track_time` datetime DEFAULT NULL COMMENT '首个国内物流时间',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT COMMENT='包裹';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=COMPACT COMMENT='包裹';
 
 ALTER TABLE `tx_parcel`
   ADD INDEX `ix_user_id` (`sender_id` ASC),

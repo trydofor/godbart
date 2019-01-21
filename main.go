@@ -4,7 +4,6 @@ import (
 	"github.com/trydofor/godbart/art"
 	"github.com/urfave/cli"
 	"io/ioutil"
-	"log"
 	"os"
 	"regexp"
 	"strings"
@@ -77,10 +76,8 @@ func checkSqls(ctx *cli.Context) (files []art.FileEntity) {
 	return
 }
 
-func checkEnvs(ctx *cli.Context) map[string]string {
+func buildEnvs(ctx *cli.Context, envs map[string]string) {
 	flag := ctx.StringSlice("e")
-
-	envs := make(map[string]string)
 	for _, env := range flag {
 		kv := strings.SplitN(env, "=", 2)
 		if len(kv) == 2 {
@@ -94,8 +91,22 @@ func checkEnvs(ctx *cli.Context) map[string]string {
 	}
 
 	art.BuiltinEnvs(envs)
+	return
+}
 
-	return envs
+func checkTmpl(ctx *cli.Context, tmpl map[string]string) (tps []string) {
+	flag := ctx.String("t")
+	keys := strings.SplitN(flag, ",", -1)
+	for _, k := range keys {
+		k = strings.TrimSpace(k)
+		if tp, ok := tmpl[k]; ok {
+			tps = append(tps, k, tp)
+			art.LogTrace("got tmpl in sqltemplet, key=%s", k)
+		} else {
+			art.ExitIfTrue(!ok, -6, "templet not found in sqltemplet, key=%s", k)
+		}
+	}
+	return
 }
 
 func checkType(ctx *cli.Context, knd []string, dft string) string {
@@ -159,7 +170,16 @@ func diff(ctx *cli.Context) error {
 	srce := checkSrce(ctx, conf, false)
 	kind := checkType(ctx, art.DiffType, art.DiffTbl)
 	tbls := checkRegx(ctx)
-	return art.Diff(&conf.Preference, srce, dest, kind, tbls)
+	return art.Diff(srce, dest, kind, tbls)
+}
+
+func show(ctx *cli.Context) error {
+	checkMlvl(ctx)
+	conf := checkConf(ctx)
+	srce := checkSrce(ctx, conf, false)
+	ktpl := checkTmpl(ctx, conf.SqlTemplet)
+	tbls := checkRegx(ctx)
+	return art.Show(srce, ktpl, tbls)
 }
 
 func synk(ctx *cli.Context) error {
@@ -175,7 +195,7 @@ func synk(ctx *cli.Context) error {
 func tree(ctx *cli.Context) error {
 	checkMlvl(ctx)
 	conf := checkConf(ctx)
-	conf.StartupEnv = checkEnvs(ctx)
+	buildEnvs(ctx, conf.StartupEnv)
 	srce := checkSrce(ctx, conf, true)
 	dest := checkDest(ctx, conf, false)
 	risk := checkRisk(ctx)
@@ -190,7 +210,7 @@ func tree(ctx *cli.Context) error {
 func sqlx(ctx *cli.Context) error {
 	checkMlvl(ctx)
 	conf := checkConf(ctx)
-	conf.StartupEnv = checkEnvs(ctx)
+	buildEnvs(ctx, conf.StartupEnv)
 	conf.StartupEnv["ENV-CHECK-RULE"] = "EMPTY"
 	sqls := checkSqls(ctx)
 	sqlx, err := art.ParseTree(&conf.Preference, conf.StartupEnv, sqls)
@@ -225,7 +245,7 @@ func main() {
 	app := cli.NewApp()
 
 	app.Author = "github.com/trydofor"
-	app.Version = "0.9.7"
+	app.Version = "0.9.8"
 	app.Compiled = time.Now()
 
 	app.Name = "godbart"
@@ -295,6 +315,12 @@ func main() {
 		Value: "tbl",
 	}
 
+	shwkFlag := &cli.StringFlag{
+		Name:  "t",
+		Usage: "show (T)emplet,`templet?` in config's sqltemplet",
+		Value: "tbl,trg",
+	}
+
 	synkFlag := &cli.StringFlag{
 		Name:  "t",
 		Usage: "sync (T)ype `type?` in,\n\tall:col+idx+trg\n\ttrg:trigger\n\ttbl:col+idx\n\trow:sync data\n\t",
@@ -345,7 +371,7 @@ func main() {
 		{
 			Name:      "diff",
 			Usage:     "diff table, column, index, trigger",
-			ArgsUsage: "tables to diff (regexp/i). empty means all",
+			ArgsUsage: "tables to diff (regexp). empty means all",
 			Flags: []cli.Flag{
 				confFlag,
 				srceFlag,
@@ -358,7 +384,7 @@ func main() {
 		{
 			Name:      "sync",
 			Usage:     "create table d.A like s.B or sync small data",
-			ArgsUsage: "tables to sync (regexp/i). empty means all",
+			ArgsUsage: "tables to sync (regexp). empty means all",
 			Flags: []cli.Flag{
 				confFlag,
 				srceFlag,
@@ -395,10 +421,22 @@ func main() {
 			},
 			Action: sqlx,
 		},
+		{
+			Name:      "show",
+			Usage:     "show ddl of table",
+			ArgsUsage: "tables to show (regexp). empty means all",
+			Flags: []cli.Flag{
+				confFlag,
+				srceFlag,
+				shwkFlag,
+				mlvlFlag,
+			},
+			Action: show,
+		},
 	}
 
 	err := app.Run(os.Args)
 	if err != nil {
-		log.Fatal(err)
+		art.LogFatal("exit by error=%v",err)
 	}
 }

@@ -12,7 +12,6 @@ const (
 	EnvHost      = "HOST"
 	EnvDate      = "DATE"
 	EnvRule      = "ENV-CHECK-RULE"
-	EnvRuleError = "ERROR"
 	EnvRuleEmpty = "EMPTY"
 
 	//
@@ -24,7 +23,6 @@ const (
 	DiffTbl = "tbl" // 分别对比`-s`和多个`-d` 间的表名差异
 	DiffAll = "all" // 分别对比`-s`和多个`-d` 间的表明细(column, index,trigger)
 	DiffCol = "col" // 比较 column, index
-	DiffDdl = "ddl" // 生成多库的创建DDL(table&index，trigger)
 
 	//
 	Joiner = "\n"
@@ -38,7 +36,7 @@ const (
 
 var (
 	MsgLevel = LvlDebug
-	DiffType = []string{DiffTbl, DiffAll, DiffCol, DiffDdl}
+	DiffType = []string{DiffTbl, DiffAll, DiffCol}
 	SyncType = []string{SyncTbl, SyncAll, SyncTrg, SyncRow}
 	EmptyArr = make([]interface{}, 0)
 	CtrlRoom = &Room{}

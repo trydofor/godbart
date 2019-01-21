@@ -153,7 +153,7 @@ ALTER TABLE `tx_outer_trknum`
 
 ### 1.4. 结构对比 Diff
 
-用来对比结构差异，也能生成创建的SQL(DDL)，支持table&index，trigger。
+用来对比结构差异，支持table&index，trigger。
 
 对比结果中，用`>`表示只有左侧存在，`<`表示只有右侧存在。
 过程信息以log输出。结果信息fmt输出，可通过`SHELL`特性分离信息。
@@ -173,7 +173,6 @@ ALTER TABLE `tx_outer_trknum`
  * `-s` 左侧比较相，必须指定。
  * `-d` 右侧比较相，可以零或多。
  * `-k` 比较类型，支持以下三种，默认`tbl`。
-    - `ddl` 生成多库的创建DDL(table&index，trigger)
     - `all` 表明细(column, index, trigger)
     - `col` 比较表名，字段和索引（不比较trigger）
     - `tbl` 表名差异
@@ -183,7 +182,31 @@ ALTER TABLE `tx_outer_trknum`
 
 当只有一个库时，不做比较，而是打印该库，多个时才进行比较。
 
-### 1.5. 结构同步 Sync
+### 1.5. 生成脚本 Show
+
+生成一些常用的DDL，如创建table, trigger，更复杂的history历史表。
+
+```bash
+./godbart show \
+ -c godbart.toml \
+ -s prd_main \
+ -t tbl,trg \
+ 'tx_parcel' \
+| tee prd_main-show-out.log
+```
+模板在`godbart.toml`中的`sqltemplet`里配置，`key`就是`-t` 参数，多个时用`,`分割。
+模板使用的`变量`全都存在时，输出模板，全都不存在时不输出，其他则报错。
+
+系统内置了以下`变量`，不想使用`${}`不可以省略，包含数组的模板会循环输出。
+
+ * ${TABLE_NAME}   string, 当前table名
+ * ${TABLE_DDL}    string, 当前table的DDL
+ * ${TRIGGER_NAME} []string, 当前table的trigger名
+ * ${TRIGGER_DDL}  []string, 当前table的trigger的DDL
+ * ${COLUMNS_BASE} string, 当前table的所有列的基本信息(名字和类型)。
+ * ${COLUMNS_FULL} string, 当前table的所有列的全部信息(同创建时，创建DDL必须一行一列，否则解析可能错误)。
+
+### 1.6. 结构同步 Sync
 
 同步多库间的表结构，目前只支持空表创建。此场景一般出现在初始化一个新数据库的时候。
 因为数据库版本管理不会造成很大差异，如果存在差异，且有数据的情况下，人工介入更好。
@@ -212,7 +235,7 @@ ALTER TABLE `tx_outer_trknum`
 
 参数为需要对比的表的名字的正则表达式。如果参数为空，表示所有表。
 
-### 1.6. 数据迁移 Tree
+### 1.7. 数据迁移 Tree
 
 不建议一次转移大量数据，有概率碰到网络超时或内存紧张。
 
@@ -283,7 +306,7 @@ SELECT * FROM tx_parcel_event WHERE parcel_id = 'tx_parcel.id';
 REPLACE INTO sys_hot_separation VALUES ('tx_parcel', 'tx_parcel.id', now());
 ```
 
-### 1.7. 控制端口
+### 1.8. 控制端口
 
 对于长时间执行的命令，支持单例和运行时控制（如优雅停止），因此增加了`控制端口`功能。
 其监听TCP端口（建议1024以上），当端口号≤0时，表示忽略此功能。
@@ -369,7 +392,7 @@ stop # 优雅停止当前一棵树的结束
  - `USER`，当前用户
  - `HOST`，主机名
  - `DATE`，当前日时(yyyy-mm-dd HH:MM:ss)
- - `ENV-CHECK-RULE`，ENV检查规则，默认`ERROR`：报错；`EMPTY`：置空；
+ - `ENV-CHECK-RULE`，ENV检查规则，默认报错，可用`EMPTY`置空
  - `SRC-DB`，当前执行的源DB（只有Tree，且唯一）；
  - `OUT-DB`，当前执行的目标DB（只有Tree，只有OUT时能确定）；
 
@@ -687,7 +710,7 @@ sed -i 's/:3306)/:13306)/g' godbart.toml
  -t all
  
 # 显示 tx_parcel表在prd_main上的创建语句
-./godbart diff \
+./godbart show \
  -c godbart.toml \
  -s prd_main \
  -t ddl \

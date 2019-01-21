@@ -16,29 +16,14 @@ type DiffItem struct {
 	TrgMap map[string]Trg
 }
 
-func Diff(pref *Preference, srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regexp) error {
+func Diff(srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regexp) error {
 
 	if srce == nil {
 		return errorAndLog("need source db to diff, type=%s", kind)
 	}
 
-	if kind == DiffDdl {
-		dbs := make([]*DataSource, 0, len(dest)+1)
-		dbs = append(dbs, srce)
-		dbs = append(dbs, dest...)
-
-		if len(dbs) == 0 {
-			return errorAndLog("no db to show create")
-		}
-
-		for _, db := range dbs {
-			conn, er := openDbAndLog(db)
-			if er != nil {
-				return er
-			}
-			showCreate(pref, conn, rgx)
-		}
-		return nil
+	if len(dest) == 0 {
+		return errorAndLog("need dest db to diff, type=%s", kind)
 	}
 
 	scon, err := openDbAndLog(srce)
@@ -229,7 +214,7 @@ func diffCol(ld, rd DiffItem, rep *strings.Builder) {
 			if ri.Deft.Valid {
 				rn = ri.Deft.String
 			}
-			dft = fmt.Sprintf("`%s`:`%s`", ln, rn)
+			dft = fmt.Sprintf("%s:%s", ln, rn)
 			cnt++
 		}
 
@@ -515,60 +500,4 @@ func makeDiffAll(con *MyConn, tbl []string, dtl map[string]DiffItem, trg bool) e
 		}
 	}
 	return nil
-}
-
-func showCreate(pref *Preference, conn *MyConn, rgx []*regexp.Regexp) {
-	tbs, err := listTable(conn, rgx)
-	if err != nil {
-		return
-	}
-
-	dbn := conn.DbName()
-	drw := pref.DelimiterRaw
-	dcm := pref.DelimiterCmd
-	dlc := pref.LineComment
-
-	if len(tbs) == 0 {
-		LogTrace("no tables on db=%s, err=%v", dbn, err)
-		return
-	}
-
-	sort.Strings(tbs)
-
-	c := len(tbs)
-	for i, tn := range tbs {
-		LogTrace("db=%s, %d/%d, table=%s", dbn, i+1, c, tn)
-		tb, e := conn.DdlTable(tn)
-		if e != nil {
-			LogError("db=%s, failed to dll table=%s", dbn, tn)
-		} else {
-			ddl := fmt.Sprintf("DROP TABLE IF EXISTS `%s`%s\n%s%s\n", tn, drw, tb, drw)
-			OutTrace("%s db=%s, %d/%d, table=%s\n%s", dlc, dbn, i+1, c, tn, ddl)
-		}
-
-		tgs, e := conn.Triggers(tn)
-		if e != nil {
-			LogError("db=%s, failed to get triggers=%s", dbn, tn)
-		} else {
-			if cnt := len(tgs); cnt > 0 {
-				tns := make([]string, 0, cnt)
-				for k := range tgs {
-					tns = append(tns, k)
-				}
-				sort.Strings(tns)
-
-				for _, k := range tns {
-					tg, r := conn.DdlTrigger(k)
-					if r != nil {
-						LogError("db=%s, failed to ddl trigger=%s, table=%s", dbn, k, tn)
-					} else {
-						ddl := fmt.Sprintf("DROP TRIGGER IF EXISTS `%s` %s\n%s $$\n%s $$\n%s %s\n", k, drw, dcm, tg, dcm, drw)
-						OutTrace("%s db=%s, trigger=%s, table=%s\n%s", dlc, dbn, k, tn, ddl)
-					}
-				}
-			}
-		}
-	}
-
-	return
 }

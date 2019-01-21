@@ -306,3 +306,137 @@ SELECT * FROM tx_parcel_event;
 
 -- -- SRC ID=26, LINE=26:26
 SELECT * FROM tx_parcel$log;
+
+-- -- SRC ID=32, LINE=32:32
+SELECT * FROM tx_receiver;
+
+-- -- OUT ID=35, LINE=35:35, FOR
+-- id=80385
+-- create_time='2016-08-11 21:17:43'
+-- modify_time='2017-12-08 07:10:14'
+-- is_deleted=0
+-- logno=-2500
+-- user_id=1
+-- name='张三'
+-- phone='13000000001'
+-- postcode='310000'
+-- country=2
+-- province='ZJ'
+-- city='杭州市'
+-- district=NULL
+-- address1='上城区江城路候潮公寓'
+-- address2=NULL
+-- hash='';
+
+-- -- OUT ID=35, LINE=35:35, FOR
+-- id=80649
+-- create_time='2016-08-12 06:32:13'
+-- modify_time='2017-12-08 07:10:14'
+-- is_deleted=0
+-- logno=-2500
+-- user_id=1
+-- name='张山'
+-- phone='13000000002'
+-- postcode='311500'
+-- country=2
+-- province='ZJ'
+-- city='杭州市'
+-- district=NULL
+-- address1='桐庐县分水镇东门雅苑'
+-- address2=''
+-- hash='';
+
+-- -- OUT ID=35, LINE=35:35, FOR
+-- id=311828
+-- create_time='2017-01-02 16:59:08'
+-- modify_time='2017-12-08 07:10:14'
+-- is_deleted=0
+-- logno=-2500
+-- user_id=78
+-- name='李四'
+-- phone='13000000003'
+-- postcode='200000'
+-- country=2
+-- province='SH'
+-- city='上海'
+-- district='徐汇区'
+-- address1='华泾路1425弄'
+-- address2=''
+-- hash='';
+
+-- -- OUT ID=35, LINE=35:35, FOR
+-- id=311829
+-- create_time='2017-01-02 17:00:51'
+-- modify_time='2017-12-08 07:10:14'
+-- is_deleted=0
+-- logno=-2500
+-- user_id=78
+-- name='李思'
+-- phone='13000000004'
+-- postcode='200000'
+-- country=2
+-- province='SH'
+-- city='上海'
+-- district='徐汇区'
+-- address1='华泾路1427弄1'
+-- address2=''
+-- hash='';
+
+-- -- SRC ID=38, LINE=38:38
+SELECT * FROM tx_track;
+
+-- -- OUT ID=41, LINE=41:41, FOR
+-- id=172204
+-- create_time='2016-08-11 21:17:43'
+-- modify_time='2016-12-09 16:28:24'
+-- is_deleted=0
+-- logno=222515
+-- user_id=1
+-- parcel_id=93152
+-- company=200
+-- track_num='SU160816'
+-- events='[{\"date\":\"2016-08-11 10:31:53\",\"info\":\"【纽约】美东仓库已揽件\",\"status\":100},{\"date\":\"2016-08-12 22:12:10\",\"info\":\"【纽约】包裹已从中转仓离开\",\"status\":200},{\"date\":\"2016-08-13 17:52:19\",\"info\":\"【纽约】干线航班已从【纽约肯尼迪国际机场】起飞，航班号：CA982\",\"status\":300},{\"date\":\"2016-08-17 08:46:33\",\"info\":\"【哈尔滨】干线航班已到达【哈尔滨太平国际机场】\",\"status\":300},{\"date\":\"2016-08-18 09:18:31\",\"info\":\"【哈尔滨】包裹清关中\",\"status\":400},{\"date\":\"2016-08-20 10:35:55\",\"info\":\"清关完成，正在国内配送\",\"status\":500}]'
+-- status=500
+-- dest_city=NULL;
+
+-- -- OUT ID=41, LINE=41:41, FOR
+-- id=172215
+-- create_time='2016-08-11 22:49:34'
+-- modify_time='2016-12-09 16:28:24'
+-- is_deleted=0
+-- logno=222515
+-- user_id=1
+-- parcel_id=93163
+-- company=200
+-- track_num='100354269562'
+-- events='[{\"date\":\"2016-08-11 22:49:34\",\"info\":\"【纽约】美东仓库已揽件\",\"status\":100},{\"date\":\"2016-08-12 22:12:07\",\"info\":\"【纽约】包裹已从中转仓离开\",\"status\":200}]'
+-- status=200
+-- dest_city=NULL;
+
+-- -- OUT ID=41, LINE=41:41, FOR
+-- id=369644
+-- create_time='2017-01-04 16:57:03'
+-- modify_time='2017-03-03 02:37:12'
+-- is_deleted=0
+-- logno=1024502
+-- user_id=78
+-- parcel_id=278581
+-- company=200
+-- track_num='303762397428'
+-- events='[{\"date\":\"2017-01-04 16:57:03\",\"info\":\"【纽约】美东仓库已揽件\",\"status\":100},{\"date\":\"2017-01-13 09:37:21\",\"info\":\"【纽约】包裹已从纽约肯尼迪国际机场发出\",\"status\":200},{\"date\":\"2017-01-13 13:37:42\",\"info\":\"【纽约】干线航班已从【纽约肯尼迪国际机场】起飞，航班号：CZ600\",\"status\":300},{\"date\":\"2017-01-14 09:03:0\",\"info\":\"【广州】干线航班已到达【广州白云国际机场】\",\"status\":300},{\"date\":\"2017-01-15 12:42:11\",\"info\":\"【广州】干线航班已从【广州白云国际机场】起飞，航班号：CA3615\",\"status\":300},{\"date\":\"2017-01-15 13:37:42\",\"info\":\"【哈尔滨】干线航班已到达【哈尔滨太平国际机场】\",\"status\":300},{\"date\":\"2017-01-15 13:40:35\",\"info\":\"【哈尔滨】包裹清关中\",\"status\":400},{\"date\":\"2017-01-18 00:18:20\",\"info\":\"清关完成，正在国内配送\",\"status\":500}]'
+-- status=500
+-- dest_city=NULL;
+
+-- -- OUT ID=41, LINE=41:41, FOR
+-- id=369647
+-- create_time='2017-01-04 16:58:03'
+-- modify_time='2017-03-03 02:36:59'
+-- is_deleted=0
+-- logno=1025160
+-- user_id=78
+-- parcel_id=278580
+-- company=200
+-- track_num='303354496818'
+-- events='[{\"date\":\"2017-01-04 16:58:03\",\"info\":\"【纽约】美东仓库已揽件\",\"status\":100},{\"date\":\"2017-01-13 09:37:21\",\"info\":\"【纽约】包裹已从纽约肯尼迪国际机场发出\",\"status\":200},{\"date\":\"2017-01-13 13:37:42\",\"info\":\"【纽约】干线航班已从【纽约肯尼迪国际机场】起飞，航班号：CZ600\",\"status\":300}]'
+-- status=300
+-- dest_city=NULL;
