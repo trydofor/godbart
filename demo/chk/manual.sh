@@ -24,7 +24,7 @@ function wait_txt(){
 }
 
 function echo_txt(){
-    echo "\e[0;34m### $1\e[m"
+    echo -e "\e[0;34m### $1\e[m"
 }
 
 function diff_txt(){
@@ -123,7 +123,7 @@ wait_txt "同步表结构:prd_main,dev_main"
  -c godbart.toml \
  -s prd_main \
  -d dev_main \
- -t all \
+ -t tbl,trg \
  --agree
 wait_txt "同步版本号:dev_main"
 ./godbart sync \
@@ -197,9 +197,9 @@ wait_txt "查询表结构:dev_main"
  -c godbart.toml \
  -s prd_main \
  -d dev_main \
- -t all \
+ -t tbl,trg \
  2>&1| tee -a $out_dir/10.txt \
  |grep -E '^[0-9]{4}[^0-9][0-9]{2}'
 diff_txt demo/chk/txt/10.txt $out_dir/10.txt "数据库表结构:dev_main"
 
-echo_txt "所有测试结束"
+echo_txt "====所有测试结束==="

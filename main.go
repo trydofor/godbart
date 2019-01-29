@@ -109,19 +109,21 @@ func checkTmpl(ctx *cli.Context, tmpl map[string]string) (tps []string) {
 	return
 }
 
-func checkType(ctx *cli.Context, knd []string, dft string) string {
+func checkType(ctx *cli.Context, knd map[string]bool, dft string) map[string]bool {
 	flag := ctx.String("t")
-	kind, ok := dft, false
-	for _, v := range knd {
-		if strings.EqualFold(flag, v) {
-			kind = v
-			ok = true
-			break
+	rst := make(map[string]bool)
+	for _, k := range strings.SplitN(flag, ",", -1) {
+		if knd[k] {
+			rst[k] = true
+			art.LogTrace("got type=%s", k)
+		} else {
+			art.ExitIfTrue(true, -6, "unsupported (T)ype=%s, in %s", k, flag)
 		}
 	}
-	art.ExitIfTrue(!ok, -6, "unsupported (T)ype=%q", flag)
-	art.LogTrace("got type=%s", flag)
-	return kind
+	if len(rst) == 0 {
+		rst[dft] = true
+	}
+	return rst
 }
 
 func checkRegx(ctx *cli.Context) []*regexp.Regexp {
@@ -168,7 +170,7 @@ func diff(ctx *cli.Context) error {
 	conf := checkConf(ctx)
 	dest := checkDest(ctx, conf, false)
 	srce := checkSrce(ctx, conf, false)
-	kind := checkType(ctx, art.DiffType, art.DiffTbl)
+	kind := checkType(ctx, art.DiffType, art.DiffSum)
 	tbls := checkRegx(ctx)
 	return art.Diff(srce, dest, kind, tbls)
 }
@@ -311,7 +313,7 @@ func main() {
 
 	difkFlag := &cli.StringFlag{
 		Name:  "t",
-		Usage: "diff (T)ype,`type?` in,\n\tall:col+idx+trg\n\tcol:without trigger\n\ttbl:table name\n\tddl:ddl for table+trigger\n\t",
+		Usage: "diff (T)ype,`type?` in,\n\tcol:columns\n\ttbl:table name\n\ttrg:trigger\n\t",
 		Value: "tbl",
 	}
 
@@ -323,7 +325,7 @@ func main() {
 
 	synkFlag := &cli.StringFlag{
 		Name:  "t",
-		Usage: "sync (T)ype `type?` in,\n\tall:col+idx+trg\n\ttrg:trigger\n\ttbl:col+idx\n\trow:sync data\n\t",
+		Usage: "sync (T)ype `type?` in,\n\ttrg:trigger\n\ttbl:col+idx\n\trow:sync data\n\t",
 		Value: "tbl",
 	}
 
@@ -437,6 +439,6 @@ func main() {
 
 	err := app.Run(os.Args)
 	if err != nil {
-		art.LogFatal("exit by error=%v",err)
+		art.LogFatal("exit by error=%v", err)
 	}
 }

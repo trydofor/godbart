@@ -28,14 +28,14 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi, mask, r
 
 	var reviSegs []ReviSeg
 	var reviSlt string
-	var tknQry ,tknSlt, tknUdp string
+	var tknQry, tknSlt, tknUdp string
 
 	reviFind, reviCurr := false, ""
 
 	if len(rqry) == 0 {
 		rqry = "SELECT"
 	}
-	tknQry = strings.ToLower(removeWhite(rqry))
+	tknQry = signifySql(rqry)
 
 	// 倒序分版本块
 	envs := make(map[string]string)
@@ -45,14 +45,14 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi, mask, r
 		sqls := ParseSqls(pref, &f)
 
 		// 按版本分段
-		idxRevi := len(sqls)-1
+		idxRevi := len(sqls) - 1
 		reviSplit := func(i int, sqlRevi string) error {
 			v := sqls[i]
 			// find and check SELECT REVI
 			for j := i; j < idxRevi; j++ {
 
 				if w := sqls[j]; w.Exeb {
-					tkn := strings.ToLower(removeWhite(w.Text))
+					tkn := signifySql(w.Text)
 
 					if !strings.HasPrefix(tkn, tknQry) {
 						continue
@@ -98,7 +98,7 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi, mask, r
 					}
 					LogTrace("find UPD-REVI-SQL, revi=%s, line=%s, file=%s, sql=%s", r, v.Line, v.File, stm)
 					p := strings.Index(stm, r)
-					tknUdp = strings.ToLower(removeWhite(stm[0:p]))
+					tknUdp = signifySql(stm[0:p])
 				}
 
 				if len(r) > 0 {
@@ -118,7 +118,7 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi, mask, r
 					}
 
 					if i < idxRevi {
-						if er := reviSplit(i, r);er != nil {
+						if er := reviSplit(i, r); er != nil {
 							return er
 						}
 					}
@@ -186,8 +186,8 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi, mask, r
 	return nil
 }
 
-func findUpdRevi(updSeg string, updRevi string, mask *regexp.Regexp) (revi string) {
-	if len(updRevi) > 0 && !strings.HasPrefix(strings.ToLower(removeWhite(updSeg)), updRevi) { // 判断相似度
+func findUpdRevi(updSeg string, tknUdp string, mask *regexp.Regexp) (revi string) {
+	if len(tknUdp) > 0 && !strings.HasPrefix(signifySql(updSeg), tknUdp) { // 判断相似度
 		return
 	}
 
@@ -251,6 +251,7 @@ func ReviEach(pref *Preference, revs []ReviSeg, conn *MyConn, slt string, mask *
 	lft := cnt
 
 	cmn, dlt := pref.LineComment, pref.DelimiterRaw
+	tkn := signifySql(slt)
 	for _, s := range revs {
 
 		pnt := 0
@@ -264,7 +265,7 @@ func ReviEach(pref *Preference, revs []ReviSeg, conn *MyConn, slt string, mask *
 			LogTrace("ignore smaller. db=%s, revi=%s, db-revi=%s, sqls=[%d,%d]/%d", dbn, s.revi, revi, cnt-lft+1, cnt-lft+pnt, cnt)
 			lft = lft - pnt
 			continue
-		}else{
+		} else {
 			walkExes(s.exes, func(exe *Exe) error {
 				pnt++
 				return nil
@@ -276,6 +277,10 @@ func ReviEach(pref *Preference, revs []ReviSeg, conn *MyConn, slt string, mask *
 			v := exe.Seg
 			delete(sts, fmt.Sprintf("%s:%d", v.File, v.Head))
 			lft = len(sts)
+			if signifySql(stm) == tkn {
+				LogTrace("db=%s, %d/%d. skip revi-slt. revi=%s, file=%s, line=%s", dbn, cnt-lft, cnt, s.revi, v.File, v.Line)
+				return nil
+			}
 			if risk {
 				a, err := conn.Exec(stm)
 				if err != nil {

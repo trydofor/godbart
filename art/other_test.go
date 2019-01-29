@@ -1,3 +1,5 @@
+// +build manual
+
 package art
 
 import (

@@ -37,7 +37,7 @@ CREATE TRIGGER ${TABLE_NAME}$log$bu BEFORE UPDATE ON ${TABLE_NAME}
 FOR EACH ROW BEGIN
   insert into ${TABLE_NAME}$log select *, null, 1, now() from ${TABLE_NAME}
   where id= OLD.id ;
-END$$
+END $$
 DELIMITER ;
 
 DROP TRIGGER IF EXISTS ${TABLE_NAME}$log$bd;
@@ -46,7 +46,7 @@ CREATE TRIGGER ${TABLE_NAME}$log$bd BEFORE DELETE ON ${TABLE_NAME}
 FOR EACH ROW BEGIN
   insert into ${TABLE_NAME}$log select *, null, 2, now() from ${TABLE_NAME}
   where id= OLD.id ;
-END$$
+END $$
 DELIMITER ;`,
 	}
 	rgx := []*regexp.Regexp{regexp.MustCompile("tx_parcel")}

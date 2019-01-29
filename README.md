@@ -56,7 +56,7 @@
  -d prd_main \
  -d prd_2018 \
  -x .sql -x .xsql \
- -t trace \
+ -l trace \
  demo/sql/init/
 ```
 
@@ -65,7 +65,7 @@
  * `-c` 必填，配置文件位置。
  * `-d` 必填，目标数据库，可以指定多个。
  * `-x` 选填，SQL文件后缀，不区分大小写。
- * `-t` 选填，通过修改输出级别，调整信息量。
+ * `-l` 选填，通过修改输出级别，调整信息量。
  * `--agree` 选填，风险自负，真正执行。
  
  在分表上执行，参考`revi`说明。
@@ -165,17 +165,17 @@ ALTER TABLE `tx_outer_trknum`
  -s prd_main \
  -d prd_2018 \
  -d dev_main \
- -t all \
+ -t tbl,trg \
  'tx_.*' \
 | tee main-2018-diff-out.log
 ```
 
  * `-s` 左侧比较相，必须指定。
  * `-d` 右侧比较相，可以零或多。
- * `-k` 比较类型，支持以下三种，默认`tbl`。
-    - `all` 表明细(column, index, trigger)
-    - `col` 比较表名，字段和索引（不比较trigger）
-    - `tbl` 表名差异
+ * `-t` 比较类型，支持以下三种，默认`tbl`，多值时用逗号分割。
+    - `tbl` 表明细(column, index)
+    - `trg` trigger
+    - `sum` 仅显示表名差异
 
 参数为需要对比的表的名字的正则表达式。如果参数为空，表示所有表。
 正则会默认进行全匹配，等同于`^$`的效果。
@@ -220,16 +220,15 @@ ALTER TABLE `tx_outer_trknum`
  -c godbart.toml \
  -s prd_main \
  -d prd_2018 \
- -t all \
+ -t tbl,trg \
  'tx_.*'
 ```
 
  * `-s` 左侧比较相，可以零或一。
  * `-d` 右侧比较相，可以一或多。
- * `-k` 创建类型，支持以下三种，默认`tbl`。
+ * `-t` 创建类型，支持以下三种，默认`tbl`。
     - `tbl` 只创建表和索引
     - `trg` 只创建trigger
-    - `all` 完全创建(column, index, trigger)
     - `row` 标准insert语法，并忽略重复，不如DBA脚本猛烈，适合小数据。
  * `--agree` 选填，风险自负，真正执行。
 
@@ -684,7 +683,7 @@ sed -i 's/:3306)/:13306)/g' godbart.toml
  -c godbart.toml \
  -s prd_main \
  -d dev_main \
- -t all \
+ -t tbl,trg \
  --agree
  
 # 同步小表（表结构版本）
@@ -707,13 +706,13 @@ sed -i 's/:3306)/:13306)/g' godbart.toml
  -c godbart.toml \
  -s prd_main \
  -d dev_main \
- -t all
+ -t tbl,trg
  
 # 显示 tx_parcel表在prd_main上的创建语句
 ./godbart show \
  -c godbart.toml \
  -s prd_main \
- -t ddl \
+ -t tbl,trg \
   tx_parcel \
 | tee /tmp/ddl-tx_parcel-main.sql
 
@@ -722,7 +721,7 @@ sed -i 's/:3306)/:13306)/g' godbart.toml
  -c godbart.toml \
  -s prd_main \
  -d prd_2018 \
- -t all \
+ -t tbl,trg \
   tx_parcel \
 | tee /tmp/diff-tx_parcel-main-2018.sql
 ```
@@ -994,3 +993,14 @@ SELECT * FROM `tx_parcel_##select` limit 1;
   - 坏消息是吞吐量不太好，好消息是不占资源。
   - 实测一棵4层100条SQL的数据树，同机同实例千万数据，每秒迁移10.87棵树。
   - 速度依赖于sql索引，golang层面提升不大。
+  
+* Q05：输出信息太多了/太快了，看不清/来不及处理
+  - 使用`-l trace`调整信息输出级别。
+  - 用 shell的重定向分离信息流。
+  - 看文档，像吃药一样，看说明书，听医嘱。
+
+* Q06：SQL没有正常解析，报错了。
+  - 确认单个完整的SQL中间没有空行分开，结尾有分隔符。
+  - 确认一组SQL间，每个独立SQL有分隔符或空行分开。
+  - 发个issue，贴上SQL，应该时没见过的SQL。
+

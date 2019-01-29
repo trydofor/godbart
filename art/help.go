@@ -90,7 +90,7 @@ func BuiltinEnvs(envs map[string]string) {
 	}
 
 	if _, ok := envs[EnvDate]; !ok {
-		dt := time.Now().Format("2006-01-02 15:04:05") // :-P
+		dt := fmtTime(time.Now(),"2006-01-02 15:04:05") // :-P
 		envs[EnvDate] = dt
 		LogTrace("put builtin env, k=%s, v=%q", EnvDate, dt)
 	}

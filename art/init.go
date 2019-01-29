@@ -20,24 +20,23 @@ const (
 	SqlFalse = "FALSE"
 
 	//
-	DiffTbl = "tbl" // 分别对比`-s`和多个`-d` 间的表名差异
-	DiffAll = "all" // 分别对比`-s`和多个`-d` 间的表明细(column, index,trigger)
-	DiffCol = "col" // 比较 column, index
+	DiffSum = "sum" // 分别对比`-s`和多个`-d` 间的表名差异
+	DiffTrg = "trg" // 比较 trigger
+	DiffTbl = "tbl" // 比较 column, index
 
 	//
 	Joiner = "\n"
 
 	//
 	SyncTbl = "tbl" // 同步表和索引
-	SyncAll = "all" // 同步说有
 	SyncTrg = "trg" // 同步trigger
 	SyncRow = "row" // 同步数据
 )
 
 var (
 	MsgLevel = LvlDebug
-	DiffType = []string{DiffTbl, DiffAll, DiffCol}
-	SyncType = []string{SyncTbl, SyncAll, SyncTrg, SyncRow}
+	DiffType = map[string]bool{DiffSum: true, DiffTrg: true, DiffTbl: true}
+	SyncType = map[string]bool{SyncTbl: true, SyncTrg: true, SyncRow: true}
 	EmptyArr = make([]interface{}, 0)
 	CtrlRoom = &Room{}
 )

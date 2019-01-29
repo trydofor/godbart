@@ -135,7 +135,26 @@ func MergeTmpl(tpl ShowTmpl, env map[string]interface{}, tbl string, con *MyConn
 			case []string:
 				sb.WriteString(val.([]string)[i])
 			case string:
-				sb.WriteString(val.(string))
+				if key == ShowColBase || key == ShowColFull {
+					// indent
+					n := 0
+					for m := b-1; m >= 0; m-- {
+						c := tmp[m]
+						if c == '\t' || c == ' ' {
+							n ++
+						} else {
+							break
+						}
+					}
+					if n > 0 {
+						nd := "\n" + strings.Repeat(" ", n)
+						sb.WriteString(strings.Replace(val.(string), "\n", nd, -1))
+					}else{
+						sb.WriteString(val.(string))
+					}
+				} else {
+					sb.WriteString(val.(string))
+				}
 			}
 		}
 		if off < len(tmp) {
@@ -229,10 +248,10 @@ func makeParaVal(key string, env map[string]interface{}, tbl string, con *MyConn
 		tkc, tkd := make([]string, lnc), make([]string, lnd)
 
 		for i, c := range col {
-			tkc[i] = strings.ToLower(onlyKeyChar(c.Name + c.Type))
+			tkc[i] = signifySql(c.Name, c.Type)
 		}
 		for i, d := range ddl {
-			tkd[i] = strings.ToLower(onlyKeyChar(d))
+			tkd[i] = signifySql(d)
 		}
 
 		b := -1
@@ -249,11 +268,12 @@ func makeParaVal(key string, env map[string]interface{}, tbl string, con *MyConn
 			}
 		}
 
-		val := strings.Join(ddl[b:b+lnc], "\n")
-		// remote head or last `,`
-		strings.TrimFunc(val, func(r rune) bool {
-			return r == ','
-		})
+		fld := make([]string, lnc)
+		for i := range fld {
+			fld[i] = strings.TrimFunc(ddl[b+i], isCommaWhite)
+		}
+
+		val := strings.Join(fld, ",\n")
 		env[key] = val
 		return val, nil
 	}

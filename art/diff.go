@@ -16,14 +16,14 @@ type DiffItem struct {
 	TrgMap map[string]Trg
 }
 
-func Diff(srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regexp) error {
+func Diff(srce *DataSource, dest []*DataSource, kind map[string]bool, rgx []*regexp.Regexp) error {
 
 	if srce == nil {
-		return errorAndLog("need source db to diff, type=%s", kind)
+		return errorAndLog("need source db to diff, type=%#v", kind)
 	}
 
 	if len(dest) == 0 {
-		return errorAndLog("need dest db to diff, type=%s", kind)
+		return errorAndLog("need dest db to diff, type=%#v", kind)
 	}
 
 	scon, err := openDbAndLog(srce)
@@ -47,8 +47,8 @@ func Diff(srce *DataSource, dest []*DataSource, kind string, rgx []*regexp.Regex
 		return err
 	}
 
-	detail := kind != DiffTbl
-	hastrg := kind == DiffAll
+	detail := kind[DiffTbl]
+	hastrg := kind[DiffTrg]
 	sdtl := make(map[string]DiffItem)
 
 	for _, con := range dcon {

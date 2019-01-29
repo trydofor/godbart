@@ -1,9 +1,13 @@
 v0.9.8
-增加`show`命令，提供ddl功能
-把`ddl`功能，从`diff`挪到`show`
-在配置中增加sql模板
-Conn接口增加TableNotFound方法
-manual.sh脚本增加日志检查
+new 增加`show`命令，提供ddl功能
+new 在配置中增加sql模板
+mod 把`ddl`功能，从`diff`挪到`show`
+mod 把 `-t`参数，为逗号分割的多值
+pro `revi`不执行版本号查询sql
+pro manual.sh脚本增加日志检查
+pro 为COL模板增加缩进
+fix Conn接口增加TableNotFound方法，处理tree中不存在的表
+fix `revi`不识别format后换行的版本号脚本
 
 v0.9.7
 增加`SEQ|TBL`指令，以支持分表的操作。

@@ -1,3 +1,5 @@
+// +build database
+
 package art
 
 import (
