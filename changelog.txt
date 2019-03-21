@@ -1,3 +1,6 @@
+v0.9.9
+fix 分析revi的bug
+
 v0.9.8
 new 增加`show`命令，提供ddl功能
 new 在配置中增加sql模板

@@ -276,8 +276,10 @@ func ParseSqlx(sqls []Sql, envs map[string]string) (*SqlExe, error) {
 								} else if rg.Type == CmndRef { // REF
 									if ex, kx := holdExe[gx.Para]; kx {
 										holdExe[gx.Hold] = ex
-										tx := &Arg{gx.Line, gx.Head, gx.Type, rg.Para, gx.Hold, rg}
-										argx[gx.Hold] = tx
+										argx[gx.Hold] = &Arg{gx.Line, gx.Head, gx.Type, rg.Para, gx.Hold, rg}
+										if ex.Refs == nil {
+											return nil, errorAndLog("never go here, From=%d, To=%d, para=%s", gx.Head, rg.Head, rg.Para)
+										}
 										ex.Refs[gx.Hold] = rg.Para
 										LogDebug("appended Exe's STR redef REF, From=%d, To=%d, para=%s", gx.Head, rg.Head, rg.Para)
 									} else {

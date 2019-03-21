@@ -744,7 +744,8 @@ sed -i 's/:3306)/:13306)/g' godbart.toml
 此例中，有`脱引号`，`模式展开` 的组合。
 
 ```bash
-# 危险动作，先保持日志查看
+# 危险动作，先保持日志查看。
+# 注意SQL以DEBUG输出，用TRACE会没有输出。
 ./godbart tree \
  -c godbart.toml \
  -s prd_main \

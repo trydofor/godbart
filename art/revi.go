@@ -46,11 +46,10 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi, mask, r
 
 		// 按版本分段
 		idxRevi := len(sqls) - 1
-		reviSplit := func(i int, sqlRevi string) error {
-			v := sqls[i]
+		reviSplit := func(bgn int, sqlRevi string) error {
 			// find and check SELECT REVI
-			for j := i; j < idxRevi; j++ {
-
+			ist := bgn // select-version-sql or bgn
+			for j := bgn; j < idxRevi; j++ {
 				if w := sqls[j]; w.Exeb {
 					tkn := signifySql(w.Text)
 
@@ -67,20 +66,22 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi, mask, r
 							return errorAndLog("SLT-REVI-SQL changed, first-sql=%s, file=%s, line=%s, now-		sql=%s", reviSlt, w.File, w.Line, w.Text)
 						}
 					}
+					ist = j
 					break
 				}
 			}
 
+			v := sqls[ist]
 			if strings.Compare(sqlRevi, revi) > 0 {
 				LogTrace("IGNORE bigger revi=%s, line=%s, file=%s", sqlRevi, v.Line, v.File)
 			} else {
-				LogTrace("build revi=%s, line from=%d, to=%d, file=%s", sqlRevi, sqls[i+1].Head, sqls[idxRevi].Head, v.File)
-				exe, er := ParseSqlx(sqls[i+1:idxRevi+1], envs)
+				LogTrace("build revi=%s, line from=%d, to=%d, file=%s", sqlRevi, sqls[ist].Head, sqls[idxRevi].Head, v.File)
+				exe, er := ParseSqlx(sqls[ist:idxRevi+1], envs)
 				if er != nil {
 					return er
 				}
 				reviSegs = append(reviSegs, ReviSeg{sqlRevi, exe.Exes})
-				LogTrace("ADD candidate revi=%s, line=%s, file=%s", sqlRevi, v.Line, v.File)
+				LogTrace("ADD candidate revi=%s, line from=%d, to=%d, file=%s", sqlRevi, sqls[ist].Head, sqls[idxRevi].Head, v.File)
 			}
 			return nil
 		}
@@ -118,7 +119,7 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi, mask, r
 					}
 
 					if i < idxRevi {
-						if er := reviSplit(i, r); er != nil {
+						if er := reviSplit(i, numRevi); er != nil {
 							return er
 						}
 					}
@@ -129,7 +130,7 @@ func Revi(pref *Preference, dest []*DataSource, file []FileEntity, revi, mask, r
 			}
 
 			if i == 0 {
-				if er := reviSplit(i, numRevi); er != nil {
+				if er := reviSplit(0, numRevi); er != nil {
 					return er
 				}
 			}

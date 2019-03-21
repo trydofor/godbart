@@ -247,23 +247,26 @@ func main() {
 	app := cli.NewApp()
 
 	app.Author = "github.com/trydofor"
-	app.Version = "0.9.8"
+	app.Version = "0.9.9"
 	app.Compiled = time.Now()
 
 	app.Name = "godbart"
 	app.Usage = "god, bart is a boy of ten."
 	app.UsageText = app.Name + " command [options] [arguments...]"
 
-	app.Description = ` a SQL-based CLI for RDBMS versioning & migration
+	app.Description = `a SQL-based CLI for RDBMS versioning & migration
 
-		use "command -h" to see command's help.
-		opt  - require exactly one
-		opt? - optional zero or one
-		opt* - conditional zero or more
+    use "command -h" to see command's help.
+    opt  - require exactly one
+    opt? - optional zero or one
+    opt* - conditional zero or more
 
-		readme - https://github.com/trydofor/godbart
-		config - https://github.com/trydofor/godbart/blob/master/godbart.toml
-		sample - https://github.com/trydofor/godbart/tree/master/demo/sql/
+    readme - https://github.com/trydofor/godbart
+    config - https://github.com/trydofor/godbart/blob/master/godbart.toml
+    sample - https://github.com/trydofor/godbart/tree/master/demo/sql/
+
+    2>&1 | tee /tmp/tmp.log                to save log
+    | grep -E '^[0-9]{4}[^0-9][0-9]{2}'    to skip output
 `
 
 	//
