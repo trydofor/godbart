@@ -75,7 +75,7 @@ func parseSqlTemplet(conf *toml.Tree) (rst map[string]string, err error) {
 			case string:
 				rst[k] = v.(string)
 			default:
-				err = errors.New("unsupported value, sqltemplet." + k);
+				err = errors.New("unsupported value, sqltemplet." + k)
 				return
 			}
 		}
@@ -93,7 +93,7 @@ func parseDataSource(conf *toml.Tree) (rst map[string]DataSource, err error) {
 			case string:
 				rst[k] = DataSource{k, v.(string)}
 			default:
-				err = errors.New("unsupported value, sqltemplet." + k);
+				err = errors.New("unsupported value, sqltemplet." + k)
 				return
 			}
 		}

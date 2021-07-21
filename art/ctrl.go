@@ -254,7 +254,7 @@ func (room *Room) gogoConn(conn net.Conn) {
 					conn.Write([]byte(fmt.Sprintf("bad job id %s, err=%s", ln, er.Error())))
 					continue
 				}
-				jbid = int64(id)
+				jbid = id
 			} else {
 				jbid = -1
 			}

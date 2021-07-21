@@ -3,8 +3,8 @@
 project="godbart"
 release=./release
 
-cd  $(dirname $0)
-rm -rf $release/
+cd  "$(dirname $0)" || exit
+rm -rf ${release:?}/
 mkdir -p $release
 
 #gofmt -w ./
@@ -24,5 +24,5 @@ for goos in "linux" "darwin" "freebsd" "windows"; do
 done
 
 # md5sum
-cd $release
+cd $release || exit
 md5sum * >> md5sum.txt

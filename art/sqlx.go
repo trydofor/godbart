@@ -16,7 +16,7 @@ const (
 	magicDo = magicA9 + magicJ7 + EnvOutDb // need prefix
 
 	HoldTop = "ITSELF"
-	//
+
 	CmndEnv = "ENV"
 	CmndVar = "VAR"
 	CmndRef = "REF"
@@ -25,7 +25,7 @@ const (
 	CmndTbl = "TBL"
 	CmndRun = "RUN"
 	CmndOut = "OUT"
-	//
+
 	ParaOne = "ONE"
 	ParaFor = "FOR"
 	ParaEnd = "END"

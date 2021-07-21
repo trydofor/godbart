@@ -256,7 +256,9 @@ func main() {
 
 	app.Description = `a SQL-based CLI for RDBMS versioning & migration
 
-    use "command -h" to see command's help.
+    use "command -h" to see command's help and example.
+	supposing godbart in $PATH and godbart.toml in $PWD 
+
     opt  - require exactly one
     opt? - optional zero or one
     opt* - conditional zero or more
@@ -361,6 +363,12 @@ func main() {
 			Name:      "revi",
 			Usage:     "upgrade schema by revision",
 			ArgsUsage: "some files or paths of SQLs",
+			Description:`
+			# save all tables(exclde $) create-table to prd_main_tbl.sql
+			godbart show -s prd_main -t tbl 'tx_[^s]+' > prd_main_tbl.sql
+			# save all tables(exclde $) create-trigger to prd_main_trg.sql
+			godbart show -s prd_main -t trg 'tx_[^s]+' > prd_main_trg.sql
+			`,
 			Flags: []cli.Flag{
 				confFlag,
 				sufxFlag,
@@ -377,6 +385,12 @@ func main() {
 			Name:      "diff",
 			Usage:     "diff table, column, index, trigger",
 			ArgsUsage: "tables to diff (regexp). empty means all",
+			Description:`
+			# save all tables(exclde $) create-table to prd_main_tbl.sql
+			godbart show -s prd_main -t tbl 'tx_[^s]+' > prd_main_tbl.sql
+			# save all tables(exclde $) create-trigger to prd_main_trg.sql
+			godbart show -s prd_main -t trg 'tx_[^s]+' > prd_main_trg.sql
+			`,
 			Flags: []cli.Flag{
 				confFlag,
 				srceFlag,
@@ -390,6 +404,12 @@ func main() {
 			Name:      "sync",
 			Usage:     "create table d.A like s.B or sync small data",
 			ArgsUsage: "tables to sync (regexp). empty means all",
+			Description:`
+			# sync table&trigger from main to 2018
+			godbart sync -s prd_main -d prd_2018 -t tbl,trg 'tx_[^s]+'
+			# sync data from main to 2018
+			godbart sync -s prd_main -d prd_2018 -t row 'tx_[^s]+'
+			`,
 			Flags: []cli.Flag{
 				confFlag,
 				srceFlag,
@@ -404,6 +424,10 @@ func main() {
 			Name:      "tree",
 			Usage:     "deal data-tree between DBs",
 			ArgsUsage: "some files or paths of SQLs",
+			Description:`
+			# save all tables(exclde $) create-table to prd_main_tbl.sql
+			godbart tree -s prd_main -d prd_2018 demo/sql/tree/tree.sql
+			`,
 			Flags: []cli.Flag{
 				confFlag,
 				sufxFlag,
@@ -430,6 +454,12 @@ func main() {
 			Name:      "show",
 			Usage:     "show ddl of table",
 			ArgsUsage: "tables to show (regexp). empty means all",
+			Description:`
+			# save all tables(exclde $) create-table to prd_main_tbl.sql
+			godbart show -s prd_main -t tbl 'tx_[^s]+' > prd_main_tbl.sql
+			# save all tables(exclde $) create-trigger to prd_main_trg.sql
+			godbart show -s prd_main -t trg 'tx_[^s]+' > prd_main_trg.sql
+			`,
 			Flags: []cli.Flag{
 				confFlag,
 				srceFlag,

@@ -98,7 +98,7 @@ func MergeTmpl(tpl ShowTmpl, env map[string]interface{}, tbl string, con *MyConn
 		switch arg {
 		case ShowTgrName, ShowTgrDdl:
 			if ln := len(val.([]string)); ln > 0 {
-				tm = ln;
+				tm = ln
 			} else {
 				LogTrace("empty templet val, arg=%s", arg)
 				zr++
@@ -167,7 +167,7 @@ func MergeTmpl(tpl ShowTmpl, env map[string]interface{}, tbl string, con *MyConn
 
 func makeParaVal(key string, env map[string]interface{}, tbl string, con *MyConn) (interface{}, error) {
 	if v, ok := env[key]; ok {
-		return v, nil;
+		return v, nil
 	}
 
 	switch key {

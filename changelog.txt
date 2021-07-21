@@ -1,5 +1,7 @@
 v0.9.9
 fix 分析revi的bug
+pro 在命令行增加help和example
+mod go升级到1.16，依赖包更新，macOs编译
 
 v0.9.8
 new 增加`show`命令，提供ddl功能

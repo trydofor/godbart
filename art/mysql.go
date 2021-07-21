@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/go-sql-driver/mysql"
 	_ "github.com/go-sql-driver/mysql"
 	"strings"
 	"time"
@@ -221,7 +220,7 @@ func (m *MyConn) DdlTrigger(trigger string) (ddl string, err error) {
 	return
 }
 
-//
+// Literal 字面量
 func (m *MyConn) Literal(val interface{}, col string) (string, bool) {
 
 	if val == nil {
@@ -294,7 +293,7 @@ func (m *MyConn) Literal(val interface{}, col string) (string, bool) {
 		} else {
 			return SqlNull, false
 		}
-	case mysql.NullTime:
+	case sql.NullTime:
 		if v.Valid {
 			return fmtTime(v.Time, tmf), true
 		} else {
@@ -364,7 +363,7 @@ func (m *MyConn) Nothing(val interface{}) bool {
 		} else {
 			return true
 		}
-	case mysql.NullTime:
+	case sql.NullTime:
 		if v.Valid {
 			return false
 		} else {
@@ -378,7 +377,7 @@ func (m *MyConn) Nothing(val interface{}) bool {
 	return false
 }
 
-// https://github.com/mysql/mysql-server/blob/mysql-5.7.5/mysys/charset.c#L823-L932
+// Quotesc https://github.com/mysql/mysql-server/blob/mysql-5.7.5/mysys/charset.c#L823-L932
 // https://github.com/mysql/mysql-server/blob/mysql-5.7.5/mysys/charset.c#L963-L1038
 func (m *MyConn) Quotesc(str, qto string) string {
 
